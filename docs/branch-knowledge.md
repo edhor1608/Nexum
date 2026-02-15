@@ -39,3 +39,17 @@
 - `8df1b39` - core capsule/restore/resource contracts
 - `17543b7` - routing daemon + socket API
 - `147de64` - store/flags + `nexumctl`
+
+## Additional Work (Milestones 4-5)
+- Added niri-native shell planning module driven by restore plans.
+- Added attention routing policy module aligned to urgency classes.
+- Added control-plane execution plan composer combining routing, shell, and attention.
+- Added shadow parity comparison module for internal cutover validation.
+- Added runtime event store (SQLite) for structured observability events.
+- Extended `nexumctl` with `flags` and `parity` commands.
+
+## New Test Coverage (Milestones 4-5)
+- Unit tests: attention routing and parity scoring behavior.
+- Integration tests: control-plane execution composition and event persistence.
+- Snapshot tests: control-plane execution contract and parity report contract.
+- E2E tests: `nexumctl flags set/show` and `nexumctl parity compare` workflows.

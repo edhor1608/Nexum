@@ -1,0 +1,9 @@
+---
+source: tests/parity_snapshots.rs
+assertion_line: 19
+expression: report
+---
+capsule_id: cap-parity-snap
+matches: true
+parity_score: 1
+mismatches: []

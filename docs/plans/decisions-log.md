@@ -38,3 +38,29 @@ Rationale:
 
 Consequences:
 - Need migration scripts/schema versioning for future store evolution.
+
+## ADR-IMPL-004
+Context:
+- D-002 moved to deep niri-centric integration, requiring explicit shell-level planning semantics.
+
+Decision:
+- Introduce `shell` and `control_plane` modules that convert restore intent into deterministic niri-oriented command plans.
+
+Rationale:
+- Keeps restore logic declarative while giving WM-native execution behavior.
+
+Consequences:
+- Command contract stability now matters for future niri adapter implementation.
+
+## ADR-IMPL-005
+Context:
+- D-008 reframed to internal capability cutovers with shadow validation.
+
+Decision:
+- Add `shadow` parity evaluator and `events` SQLite sink, and expose parity/flag operations through `nexumctl`.
+
+Rationale:
+- Enables measurable rollout gates and reversible cutovers with local-only operation.
+
+Consequences:
+- Requires operational policy thresholds for parity acceptance in later rollout phases.
