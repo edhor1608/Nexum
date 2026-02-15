@@ -1,0 +1,10 @@
+---
+source: tests/snapshots.rs
+assertion_line: 7
+expression: capsule
+---
+capsule_id: cap-snap-1
+slug: payments-control-plane
+display_name: Payments Control Plane
+mode: host_default
+workspace: 11
