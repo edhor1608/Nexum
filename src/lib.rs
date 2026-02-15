@@ -1,6 +1,9 @@
+pub mod attention;
 pub mod capsule;
+pub mod control_plane;
 pub mod flags;
 pub mod ports;
 pub mod restore;
 pub mod routing;
+pub mod shell;
 pub mod store;

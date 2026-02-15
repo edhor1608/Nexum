@@ -1,0 +1,25 @@
+---
+source: tests/control_plane_snapshots.rs
+assertion_line: 25
+expression: execution
+---
+capsule_id: cap-cp-snap
+target_budget_ms: 9500
+steps:
+  - kind: ensure_route
+    value:
+      domain: agent-gateway.nexum.local
+  - kind: shell_focus_workspace
+    value: 3
+  - kind: shell_spawn_terminal
+    value: cd /workspace/agent-gateway && nix develop
+  - kind: shell_spawn_editor
+    value: /workspace/agent-gateway
+  - kind: shell_spawn_browser
+    value: "https://agent-gateway.nexum.local/dashboard"
+  - kind: emit_attention
+    value:
+      priority: active
+      channel: banner
+      requires_ack: true
+      summary: decision needed
