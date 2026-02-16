@@ -25,6 +25,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "capsule" => capsule_command(&args[1..])?,
         "flags" => flags_command(&args[1..])?,
         "parity" => parity_command(&args[1..])?,
+        "events" => events_command(&args[1..])?,
         "routing" => routing_command(&args[1..])?,
         "shell" => shell_command(&args[1..])?,
         "tls" => tls_command(&args[1..])?,
@@ -233,6 +234,29 @@ fn parity_command(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
             std::process::exit(2);
         }
     }
+}
+
+fn events_command(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    if args.is_empty() {
+        usage();
+        std::process::exit(2);
+    }
+
+    match args[0].as_str() {
+        "summary" => events_summary(&args[1..]),
+        _ => {
+            usage();
+            std::process::exit(2);
+        }
+    }
+}
+
+fn events_summary(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let db = required_arg(args, "--db")?;
+    let store = EventStore::open(&PathBuf::from(db))?;
+    let summary = store.summary()?;
+    println!("{}", serde_json::to_string(&summary)?);
+    Ok(())
 }
 
 fn parity_compare(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
@@ -596,6 +620,7 @@ fn usage() {
     );
     eprintln!("nexumctl flags show --file <path>");
     eprintln!("nexumctl parity compare --primary-json <json> --candidate-json <json>");
+    eprintln!("nexumctl events summary --db <path>");
     eprintln!("nexumctl routing health [--socket <path>]");
     eprintln!(
         "nexumctl routing register --capsule-id <id> --domain <domain> --upstream <host:port> [--socket <path>]"

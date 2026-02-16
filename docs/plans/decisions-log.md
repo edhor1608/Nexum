@@ -259,3 +259,16 @@ Rationale:
 
 Consequences:
 - Capsule serialization and list/export contracts changed to include `repo_path`.
+
+## ADR-IMPL-021
+Context:
+- Runtime observability needed an operator-facing rollup view, but event inspection required raw per-event reads.
+
+Decision:
+- Add `EventStore::summary()` and expose it via `nexumctl events summary --db <path>`.
+
+Rationale:
+- Provides a fast supervisor health view (global totals + per-capsule critical counts) without custom ad-hoc queries.
+
+Consequences:
+- Events CLI contract expands with a summary endpoint and stable JSON shape for monitoring/tooling consumers.

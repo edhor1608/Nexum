@@ -13,6 +13,20 @@ pub struct RuntimeEvent {
     pub ts_unix_ms: u64,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CapsuleEventSummary {
+    pub capsule_id: String,
+    pub total_events: u32,
+    pub critical_events: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EventSummary {
+    pub total_events: u32,
+    pub critical_events: u32,
+    pub capsules: Vec<CapsuleEventSummary>,
+}
+
 #[derive(Debug, Error)]
 pub enum EventError {
     #[error("db: {0}")]
@@ -107,5 +121,43 @@ impl EventStore {
             |row| row.get::<_, u32>(0),
         )?;
         Ok(count)
+    }
+
+    pub fn summary(&self) -> Result<EventSummary, EventError> {
+        let total_events =
+            self.conn
+                .query_row("SELECT COUNT(*) FROM runtime_events", [], |row| {
+                    row.get::<_, u32>(0)
+                })?;
+        let critical_events = self.conn.query_row(
+            "SELECT COUNT(*) FROM runtime_events WHERE level = 'critical'",
+            [],
+            |row| row.get::<_, u32>(0),
+        )?;
+
+        let mut stmt = self.conn.prepare(
+            "
+            SELECT capsule_id, COUNT(*) AS total_events,
+                   SUM(CASE WHEN level = 'critical' THEN 1 ELSE 0 END) AS critical_events
+            FROM runtime_events
+            GROUP BY capsule_id
+            ORDER BY capsule_id ASC
+            ",
+        )?;
+        let capsules = stmt
+            .query_map([], |row| {
+                Ok(CapsuleEventSummary {
+                    capsule_id: row.get(0)?,
+                    total_events: row.get(1)?,
+                    critical_events: row.get(2)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(EventSummary {
+            total_events,
+            critical_events,
+            capsules,
+        })
     }
 }

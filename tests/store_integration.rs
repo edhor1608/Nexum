@@ -121,8 +121,13 @@ fn store_persists_capsule_repo_path_updates() {
     let mut store = CapsuleStore::open(&db).unwrap();
     store
         .upsert(
-            Capsule::new("cap-store-repo", "Repo Capsule", CapsuleMode::HostDefault, 6)
-                .with_repo_path("/workspace/repo-capsule"),
+            Capsule::new(
+                "cap-store-repo",
+                "Repo Capsule",
+                CapsuleMode::HostDefault,
+                6,
+            )
+            .with_repo_path("/workspace/repo-capsule"),
         )
         .unwrap();
 

@@ -198,3 +198,10 @@
 - Store integration test for repo-path persistence.
 - Capsule lifecycle CLI e2e updated to validate repo-path mutation.
 - Capsule and store snapshots updated for repo-path contract field.
+
+## Additional Work (Milestone 21)
+- Added aggregated runtime events summary in event store (global totals + per-capsule rollup).
+- Added `nexumctl events summary` command for supervisor-level health visibility.
+
+## New Test Coverage (Milestone 21)
+- Events CLI e2e validating aggregate totals and capsule-level critical counts.
