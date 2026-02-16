@@ -10,7 +10,7 @@ use nexum::{
     runflow::{RestoreRunInput, run_restore_flow},
     shadow::{ExecutionResult, compare_execution},
     shell::{NiriShellCommand, NiriShellPlan, render_shell_script},
-    stead::parse_dispatch_event,
+    stead::{DispatchEvent, parse_dispatch_event, parse_dispatch_events},
     store::CapsuleStore,
     tls::{ensure_self_signed_cert, rotate_if_expiring},
 };
@@ -768,6 +768,7 @@ fn stead_command(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
 
     match args[0].as_str() {
         "dispatch" => stead_dispatch(&args[1..]),
+        "dispatch-batch" => stead_dispatch_batch(&args[1..]),
         _ => {
             usage();
             std::process::exit(2);
@@ -779,13 +780,108 @@ fn stead_dispatch(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let capsule_db = PathBuf::from(required_arg(args, "--capsule-db")?);
     let event = parse_dispatch_event(&required_arg(args, "--event-json")?)
         .map_err(|error| error.to_string())?;
+    let summary = dispatch_stead_event(
+        &capsule_db,
+        event,
+        optional_arg(args, "--terminal"),
+        optional_arg(args, "--editor"),
+        optional_arg(args, "--browser"),
+        optional_arg(args, "--routing-socket").map(PathBuf::from),
+        PathBuf::from(required_arg(args, "--tls-dir")?),
+        PathBuf::from(required_arg(args, "--events-db")?),
+    )?;
 
-    let store = CapsuleStore::open(&capsule_db)?;
+    println!("{}", serde_json::to_string(&summary)?);
+    Ok(())
+}
+
+#[derive(Debug, Serialize)]
+struct SteadBatchResult {
+    capsule_id: String,
+    ok: bool,
+    error: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct SteadBatchReport {
+    processed: u32,
+    succeeded: u32,
+    failed: u32,
+    results: Vec<SteadBatchResult>,
+}
+
+fn stead_dispatch_batch(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let capsule_db = PathBuf::from(required_arg(args, "--capsule-db")?);
+    let events = parse_dispatch_events(&required_arg(args, "--events-json")?)
+        .map_err(|error| error.to_string())?;
+    let terminal = optional_arg(args, "--terminal");
+    let editor = optional_arg(args, "--editor");
+    let browser = optional_arg(args, "--browser");
+    let routing_socket = optional_arg(args, "--routing-socket").map(PathBuf::from);
+    let tls_dir = PathBuf::from(required_arg(args, "--tls-dir")?);
+    let events_db = PathBuf::from(required_arg(args, "--events-db")?);
+
+    let mut succeeded = 0u32;
+    let mut failed = 0u32;
+    let mut results = Vec::with_capacity(events.len());
+
+    for event in events {
+        let capsule_id = event.capsule_id.clone();
+        match dispatch_stead_event(
+            &capsule_db,
+            event,
+            terminal.clone(),
+            editor.clone(),
+            browser.clone(),
+            routing_socket.clone(),
+            tls_dir.clone(),
+            events_db.clone(),
+        ) {
+            Ok(_) => {
+                succeeded += 1;
+                results.push(SteadBatchResult {
+                    capsule_id,
+                    ok: true,
+                    error: None,
+                });
+            }
+            Err(error) => {
+                failed += 1;
+                results.push(SteadBatchResult {
+                    capsule_id,
+                    ok: false,
+                    error: Some(error.to_string()),
+                });
+            }
+        }
+    }
+
+    let report = SteadBatchReport {
+        processed: (succeeded + failed),
+        succeeded,
+        failed,
+        results,
+    };
+    println!("{}", serde_json::to_string(&report)?);
+    Ok(())
+}
+
+fn dispatch_stead_event(
+    capsule_db: &PathBuf,
+    event: DispatchEvent,
+    terminal_override: Option<String>,
+    editor_override: Option<String>,
+    browser_override: Option<String>,
+    routing_socket: Option<PathBuf>,
+    tls_dir: PathBuf,
+    events_db: PathBuf,
+) -> Result<nexum::runflow::RestoreRunSummary, Box<dyn std::error::Error>> {
+    let store = CapsuleStore::open(capsule_db)?;
     let capsule = store
         .get(&event.capsule_id)?
         .ok_or_else(|| format!("unknown capsule: {}", event.capsule_id))?;
 
-    let terminal_cmd = if let Some(terminal) = optional_arg(args, "--terminal") {
+    let terminal_cmd = if let Some(terminal) = terminal_override {
         terminal
     } else if !capsule.repo_path.is_empty() {
         format!("cd {} && nix develop", capsule.repo_path)
@@ -796,7 +892,7 @@ fn stead_dispatch(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
         );
     };
 
-    let editor_target = if let Some(editor) = optional_arg(args, "--editor") {
+    let editor_target = if let Some(editor) = editor_override {
         editor
     } else if !capsule.repo_path.is_empty() {
         capsule.repo_path.clone()
@@ -807,10 +903,9 @@ fn stead_dispatch(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
         );
     };
 
-    let browser_url =
-        optional_arg(args, "--browser").unwrap_or_else(|| format!("https://{}", capsule.domain()));
+    let browser_url = browser_override.unwrap_or_else(|| format!("https://{}", capsule.domain()));
 
-    let summary = run_restore_flow(RestoreRunInput {
+    run_restore_flow(RestoreRunInput {
         capsule_id: capsule.capsule_id,
         display_name: capsule.display_name,
         workspace: capsule.workspace,
@@ -819,17 +914,15 @@ fn stead_dispatch(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
         editor_target,
         browser_url,
         route_upstream: event.upstream,
-        routing_socket: optional_arg(args, "--routing-socket").map(PathBuf::from),
+        routing_socket,
         identity_collision: event.identity_collision,
         high_risk_secret_workflow: event.high_risk_secret_workflow,
         force_isolated_mode: event.force_isolated_mode,
-        capsule_db: Some(capsule_db),
-        tls_dir: PathBuf::from(required_arg(args, "--tls-dir")?),
-        events_db: PathBuf::from(required_arg(args, "--events-db")?),
-    })?;
-
-    println!("{}", serde_json::to_string(&summary)?);
-    Ok(())
+        capsule_db: Some(capsule_db.to_path_buf()),
+        tls_dir,
+        events_db,
+    })
+    .map_err(|error| -> Box<dyn std::error::Error> { Box::new(error) })
 }
 
 fn run_restore(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
@@ -1024,6 +1117,9 @@ fn usage() {
     );
     eprintln!(
         "nexumctl stead dispatch --capsule-db <path> --event-json <json> [--terminal <cmd>] [--editor <path>] [--browser <url>] [--routing-socket <path>] --tls-dir <path> --events-db <path>"
+    );
+    eprintln!(
+        "nexumctl stead dispatch-batch --capsule-db <path> --events-json <json-array> [--terminal <cmd>] [--editor <path>] [--browser <url>] [--routing-socket <path>] --tls-dir <path> --events-db <path>"
     );
     eprintln!(
         "nexumctl supervisor status --capsule-db <path> --events-db <path> --flags-file <path>"

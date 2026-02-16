@@ -402,3 +402,16 @@ Rationale:
 
 Consequences:
 - Cutover CLI now supports both activation and rollback paths with machine-readable rollback confirmation output.
+
+## ADR-IMPL-032
+Context:
+- Stead dispatch ingress handled only single event envelopes, requiring repeated CLI/process overhead for batch replay scenarios.
+
+Decision:
+- Add `stead dispatch-batch` command accepting an array of dispatch envelopes and producing per-event outcome records.
+
+Rationale:
+- Enables deterministic multi-event replay and supervisor ingestion workflows while preserving per-event failure visibility.
+
+Consequences:
+- Stead CLI surface now includes batch ingestion endpoint with aggregated processed/succeeded/failed counters and per-event errors.

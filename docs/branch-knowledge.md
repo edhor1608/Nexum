@@ -298,3 +298,10 @@
 
 ## New Test Coverage (Milestone 31)
 - Cutover CLI e2e validating rollback disables only the targeted capability flag.
+
+## Additional Work (Milestone 32)
+- Added `nexumctl stead dispatch-batch` command for multi-event ingest.
+- Batch dispatch reuses single-event restore semantics and returns per-event success/failure entries without aborting the whole batch.
+
+## New Test Coverage (Milestone 32)
+- Stead CLI e2e validating mixed batch outcomes with deterministic per-event result payloads.
