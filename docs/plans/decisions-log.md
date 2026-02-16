@@ -311,3 +311,16 @@ Rationale:
 
 Consequences:
 - Events CLI contract expands with list query flags and deterministic newest-first ordering semantics.
+
+## ADR-IMPL-025
+Context:
+- Stead/OS integration boundary was implicit through manual CLI invocations, with no typed ingress contract for runtime signal dispatch.
+
+Decision:
+- Add typed Stead dispatch envelope parsing and expose command `nexumctl stead dispatch`.
+
+Rationale:
+- Creates a concrete contract between Stead signal producers and OS restore orchestration while keeping execution testable in CLI/e2e flows.
+
+Consequences:
+- CLI surface expands with Stead dispatch entrypoint; invalid envelopes now fail fast with explicit parse errors.

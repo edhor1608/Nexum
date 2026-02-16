@@ -10,6 +10,7 @@ use nexum::{
     runflow::{RestoreRunInput, run_restore_flow},
     shadow::{ExecutionResult, compare_execution},
     shell::{NiriShellCommand, NiriShellPlan, render_shell_script},
+    stead::parse_dispatch_event,
     store::CapsuleStore,
     tls::{ensure_self_signed_cert, rotate_if_expiring},
 };
@@ -28,6 +29,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "events" => events_command(&args[1..])?,
         "routing" => routing_command(&args[1..])?,
         "shell" => shell_command(&args[1..])?,
+        "stead" => stead_command(&args[1..])?,
         "tls" => tls_command(&args[1..])?,
         "cutover" => cutover_command(&args[1..])?,
         "run" => run_command(&args[1..])?,
@@ -533,6 +535,78 @@ fn run_command(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     }
 }
 
+fn stead_command(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    if args.is_empty() {
+        usage();
+        std::process::exit(2);
+    }
+
+    match args[0].as_str() {
+        "dispatch" => stead_dispatch(&args[1..]),
+        _ => {
+            usage();
+            std::process::exit(2);
+        }
+    }
+}
+
+fn stead_dispatch(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let capsule_db = PathBuf::from(required_arg(args, "--capsule-db")?);
+    let event = parse_dispatch_event(&required_arg(args, "--event-json")?)
+        .map_err(|error| error.to_string())?;
+
+    let store = CapsuleStore::open(&capsule_db)?;
+    let capsule = store
+        .get(&event.capsule_id)?
+        .ok_or_else(|| format!("unknown capsule: {}", event.capsule_id))?;
+
+    let terminal_cmd = if let Some(terminal) = optional_arg(args, "--terminal") {
+        terminal
+    } else if !capsule.repo_path.is_empty() {
+        format!("cd {} && nix develop", capsule.repo_path)
+    } else {
+        return Err(
+            "missing restore surfaces: provide --terminal and --editor or set capsule repo_path"
+                .into(),
+        );
+    };
+
+    let editor_target = if let Some(editor) = optional_arg(args, "--editor") {
+        editor
+    } else if !capsule.repo_path.is_empty() {
+        capsule.repo_path.clone()
+    } else {
+        return Err(
+            "missing restore surfaces: provide --terminal and --editor or set capsule repo_path"
+                .into(),
+        );
+    };
+
+    let browser_url =
+        optional_arg(args, "--browser").unwrap_or_else(|| format!("https://{}", capsule.domain()));
+
+    let summary = run_restore_flow(RestoreRunInput {
+        capsule_id: capsule.capsule_id,
+        display_name: capsule.display_name,
+        workspace: capsule.workspace,
+        signal: event.signal,
+        terminal_cmd,
+        editor_target,
+        browser_url,
+        route_upstream: event.upstream,
+        routing_socket: optional_arg(args, "--routing-socket").map(PathBuf::from),
+        identity_collision: event.identity_collision,
+        high_risk_secret_workflow: event.high_risk_secret_workflow,
+        force_isolated_mode: event.force_isolated_mode,
+        capsule_db: Some(capsule_db),
+        tls_dir: PathBuf::from(required_arg(args, "--tls-dir")?),
+        events_db: PathBuf::from(required_arg(args, "--events-db")?),
+    })?;
+
+    println!("{}", serde_json::to_string(&summary)?);
+    Ok(())
+}
+
 fn run_restore(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let signal = parse_signal(&required_arg(args, "--signal")?)?;
     let identity_collision = optional_arg(args, "--identity-collision")
@@ -721,6 +795,9 @@ fn usage() {
     eprintln!("nexumctl routing list [--socket <path>]");
     eprintln!(
         "nexumctl shell render --workspace <n> --terminal <cmd> --editor <path> --browser <url> --attention <level>"
+    );
+    eprintln!(
+        "nexumctl stead dispatch --capsule-db <path> --event-json <json> [--terminal <cmd>] [--editor <path>] [--browser <url>] [--routing-socket <path>] --tls-dir <path> --events-db <path>"
     );
     eprintln!("nexumctl tls ensure --dir <path> --domain <domain> [--validity-days <days>]");
     eprintln!("nexumctl tls rotate --dir <path> --domain <domain> --threshold-days <days>");

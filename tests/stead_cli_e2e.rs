@@ -1,0 +1,83 @@
+use std::process::Command;
+
+use serde_json::Value;
+use tempfile::tempdir;
+
+#[test]
+fn nexumctl_stead_dispatch_runs_restore_from_event_envelope() {
+    let dir = tempdir().unwrap();
+    let capsule_db = dir.path().join("capsules.sqlite3");
+    let tls_dir = dir.path().join("tls");
+    let events_db = dir.path().join("events.sqlite3");
+    let nexumctl = assert_cmd::cargo::cargo_bin!("nexumctl");
+
+    let create = Command::new(nexumctl)
+        .arg("capsule")
+        .arg("create")
+        .arg("--db")
+        .arg(&capsule_db)
+        .arg("--id")
+        .arg("cap-stead-1")
+        .arg("--name")
+        .arg("Stead Capsule")
+        .arg("--workspace")
+        .arg("20")
+        .arg("--mode")
+        .arg("host_default")
+        .arg("--repo-path")
+        .arg("/workspace/stead")
+        .output()
+        .unwrap();
+    assert!(create.status.success());
+
+    let envelope =
+        r#"{"capsule_id":"cap-stead-1","signal":"needs_decision","upstream":"127.0.0.1:4788"}"#;
+
+    let out = Command::new(nexumctl)
+        .arg("stead")
+        .arg("dispatch")
+        .arg("--capsule-db")
+        .arg(&capsule_db)
+        .arg("--event-json")
+        .arg(envelope)
+        .arg("--tls-dir")
+        .arg(&tls_dir)
+        .arg("--events-db")
+        .arg(&events_db)
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+
+    let payload: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(payload["capsule_id"], Value::String("cap-stead-1".into()));
+    let script = payload["shell_script"].as_str().unwrap();
+    assert!(script.contains("cd /workspace/stead && nix develop"));
+    assert!(script.contains("code /workspace/stead"));
+    assert!(script.contains("xdg-open https://stead-capsule.nexum.local"));
+}
+
+#[test]
+fn nexumctl_stead_dispatch_rejects_invalid_event_payload() {
+    let dir = tempdir().unwrap();
+    let capsule_db = dir.path().join("capsules.sqlite3");
+    let tls_dir = dir.path().join("tls");
+    let events_db = dir.path().join("events.sqlite3");
+    let nexumctl = assert_cmd::cargo::cargo_bin!("nexumctl");
+
+    let out = Command::new(nexumctl)
+        .arg("stead")
+        .arg("dispatch")
+        .arg("--capsule-db")
+        .arg(&capsule_db)
+        .arg("--event-json")
+        .arg("{\"capsule_id\":\"cap-stead-1\"}")
+        .arg("--tls-dir")
+        .arg(&tls_dir)
+        .arg("--events-db")
+        .arg(&events_db)
+        .output()
+        .unwrap();
+    assert!(!out.status.success());
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("event-json"));
+}

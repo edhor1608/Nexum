@@ -238,3 +238,12 @@
 ## New Test Coverage (Milestone 24)
 - Observability integration test for filtered + limited recent event queries.
 - Events CLI e2e for `events list` filter and limit behavior.
+
+## Additional Work (Milestone 25)
+- Added explicit Stead ingress boundary via `stead::DispatchEvent` envelope parser.
+- Added `nexumctl stead dispatch` command to execute restore from Stead event payloads plus capsule metadata.
+- Dispatch path supports event-driven isolation flags (`identity_collision`, `high_risk_secret_workflow`, `force_isolated_mode`) and optional surface overrides.
+
+## New Test Coverage (Milestone 25)
+- Stead CLI e2e for successful envelope-driven restore dispatch.
+- Stead CLI e2e for strict rejection of invalid event payloads.

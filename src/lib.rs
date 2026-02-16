@@ -13,5 +13,6 @@ pub mod runflow;
 pub mod runtime_meta;
 pub mod shadow;
 pub mod shell;
+pub mod stead;
 pub mod store;
 pub mod tls;
