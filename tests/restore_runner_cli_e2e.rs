@@ -47,6 +47,7 @@ fn nexumctl_run_restore_executes_end_to_end_plan() {
             .unwrap()
             .contains("xdg-open https://runner-cli.nexum.local")
     );
+    assert_eq!(value["run_mode"], Value::String("host_default".into()));
     assert_eq!(value["events_written"], Value::Number(3u64.into()));
 }
 
@@ -178,6 +179,72 @@ fn nexumctl_run_restore_uses_profile_fallback_when_identity_collision_flag_is_se
     let script = value["shell_script"].as_str().unwrap();
     assert!(script.contains("firefox --profile"));
     assert!(script.contains("runner-collision.nexum.local"));
+    assert_eq!(
+        value["run_mode"],
+        Value::String("isolated_nix_shell".into())
+    );
+
+    daemon.kill().unwrap();
+    let _ = daemon.wait();
+}
+
+#[test]
+fn nexumctl_run_restore_escalates_to_isolated_mode_for_high_risk_secret_workflow() {
+    let dir = tempdir().unwrap();
+    let socket = dir.path().join("nexumd.sock");
+    let tls_dir = dir.path().join("tls");
+    let events_db = dir.path().join("events.sqlite3");
+
+    let mut daemon = Command::new(assert_cmd::cargo::cargo_bin!("nexumd"))
+        .arg("serve")
+        .arg("--socket")
+        .arg(&socket)
+        .spawn()
+        .unwrap();
+    for _ in 0..40 {
+        if socket.exists() {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(25));
+    }
+
+    let nexumctl = assert_cmd::cargo::cargo_bin!("nexumctl");
+    let out = Command::new(nexumctl)
+        .arg("run")
+        .arg("restore")
+        .arg("--capsule-id")
+        .arg("cap-run-cli-secret")
+        .arg("--name")
+        .arg("Runner Secret")
+        .arg("--workspace")
+        .arg("11")
+        .arg("--signal")
+        .arg("needs_decision")
+        .arg("--terminal")
+        .arg("cd /workspace/secret && nix develop")
+        .arg("--editor")
+        .arg("/workspace/secret")
+        .arg("--browser")
+        .arg("https://runner-secret.nexum.local")
+        .arg("--upstream")
+        .arg("127.0.0.1:4760")
+        .arg("--routing-socket")
+        .arg(&socket)
+        .arg("--high-risk-secret")
+        .arg("true")
+        .arg("--tls-dir")
+        .arg(&tls_dir)
+        .arg("--events-db")
+        .arg(&events_db)
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+
+    let value: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(
+        value["run_mode"],
+        Value::String("isolated_nix_shell".into())
+    );
 
     daemon.kill().unwrap();
     let _ = daemon.wait();

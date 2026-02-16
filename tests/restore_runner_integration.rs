@@ -22,6 +22,8 @@ fn run_restore_flow_returns_script_and_persists_events() {
         route_upstream: "127.0.0.1:4700".into(),
         routing_socket: None,
         identity_collision: false,
+        high_risk_secret_workflow: false,
+        force_isolated_mode: false,
         tls_dir,
         events_db: events_db.clone(),
     })

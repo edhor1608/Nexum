@@ -1,10 +1,11 @@
 ---
 source: tests/restore_runner_snapshots.rs
-assertion_line: 28
+assertion_line: 32
 expression: summary
 ---
 capsule_id: cap-run-snap
 domain: runner-snap.nexum.local
+run_mode: host_default
 target_budget_ms: 9500
 shell_script: "niri msg action focus-workspace 5\nwezterm start -- bash -lc 'cd /workspace/snap && nix develop'\ncode /workspace/snap\nxdg-open https://runner-snap.nexum.local\nnotify-send 'Nexum Attention' 'critical_failure'"
 tls_fingerprint_sha256: "<fingerprint>"

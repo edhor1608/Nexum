@@ -387,6 +387,14 @@ fn run_restore(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
         .map(|value| parse_bool(&value))
         .transpose()?
         .unwrap_or(false);
+    let high_risk_secret_workflow = optional_arg(args, "--high-risk-secret")
+        .map(|value| parse_bool(&value))
+        .transpose()?
+        .unwrap_or(false);
+    let force_isolated_mode = optional_arg(args, "--force-isolated")
+        .map(|value| parse_bool(&value))
+        .transpose()?
+        .unwrap_or(false);
 
     let summary = run_restore_flow(RestoreRunInput {
         capsule_id: required_arg(args, "--capsule-id")?,
@@ -399,6 +407,8 @@ fn run_restore(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
         route_upstream: required_arg(args, "--upstream")?,
         routing_socket: optional_arg(args, "--routing-socket").map(PathBuf::from),
         identity_collision,
+        high_risk_secret_workflow,
+        force_isolated_mode,
         tls_dir: PathBuf::from(required_arg(args, "--tls-dir")?),
         events_db: PathBuf::from(required_arg(args, "--events-db")?),
     })?;
@@ -483,6 +493,6 @@ fn usage() {
         "nexumctl cutover apply --file <path> --capability <routing|restore|attention> --parity-score <f64> --min-parity-score <f64> --critical-events <u32> --max-critical-events <u32> --shadow-mode <true|false>"
     );
     eprintln!(
-        "nexumctl run restore --capsule-id <id> --name <name> --workspace <n> --signal <needs_decision|critical_failure|passive_completion> --terminal <cmd> --editor <path> --browser <url> --upstream <host:port> [--routing-socket <path>] [--identity-collision true|false] --tls-dir <path> --events-db <path>"
+        "nexumctl run restore --capsule-id <id> --name <name> --workspace <n> --signal <needs_decision|critical_failure|passive_completion> --terminal <cmd> --editor <path> --browser <url> --upstream <host:port> [--routing-socket <path>] [--identity-collision true|false] [--high-risk-secret true|false] [--force-isolated true|false] --tls-dir <path> --events-db <path>"
     );
 }

@@ -168,3 +168,16 @@ Rationale:
 
 Consequences:
 - Restore command contract now includes collision signaling input, and shell script generation includes policy-specific browser launch substitution.
+
+## ADR-IMPL-014
+Context:
+- Hybrid isolation policy required deterministic escalation beyond identity collision, including secret-sensitive workflows and explicit user overrides.
+
+Decision:
+- Add `isolation` policy module and expose escalation controls in restore CLI (`--high-risk-secret`, `--force-isolated`), with resulting mode surfaced in restore summary.
+
+Rationale:
+- Makes isolation behavior explicit, testable, and auditable while preserving host-default as baseline.
+
+Consequences:
+- Restore input/output contracts expanded, including new mode signal (`run_mode`) that downstream consumers may rely on.

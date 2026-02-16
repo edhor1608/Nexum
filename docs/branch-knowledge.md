@@ -131,3 +131,13 @@
 ## New Test Coverage (Milestone 13)
 - Identity policy unit tests for domain-default and collision fallback command generation.
 - Restore runner CLI e2e for collision-driven profile fallback behavior.
+
+## Additional Work (Milestone 14)
+- Added isolation policy module implementing mode escalation for collision, high-risk secret workflow, or explicit override.
+- Extended restore flow summary with `run_mode` for operator-visible isolation state.
+- Extended `nexumctl run restore` with `--high-risk-secret` and `--force-isolated` toggles.
+
+## New Test Coverage (Milestone 14)
+- Isolation policy unit matrix for default mode and all escalation triggers.
+- Restore CLI e2e for high-risk secret mode escalation.
+- Restore runner snapshot contract now locks `run_mode` output.

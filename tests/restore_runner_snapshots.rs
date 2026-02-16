@@ -21,6 +21,8 @@ fn snapshot_restore_runner_summary_contract() {
         route_upstream: "127.0.0.1:4710".into(),
         routing_socket: None,
         identity_collision: false,
+        high_risk_secret_workflow: false,
+        force_isolated_mode: false,
         tls_dir,
         events_db,
     })

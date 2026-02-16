@@ -51,6 +51,8 @@ fn run_restore_flow_registers_route_via_daemon_socket() {
         route_upstream: "127.0.0.1:4780".into(),
         routing_socket: Some(socket.clone()),
         identity_collision: false,
+        high_risk_secret_workflow: false,
+        force_isolated_mode: false,
         tls_dir,
         events_db,
     })
@@ -112,6 +114,8 @@ fn run_restore_flow_returns_error_when_daemon_reports_domain_conflict() {
         route_upstream: "127.0.0.1:4791".into(),
         routing_socket: Some(socket.clone()),
         identity_collision: false,
+        high_risk_secret_workflow: false,
+        force_isolated_mode: false,
         tls_dir,
         events_db,
     })

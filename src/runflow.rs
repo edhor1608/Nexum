@@ -10,6 +10,7 @@ use crate::{
     capsule::{Capsule, CapsuleMode},
     events::{EventError, EventStore, RuntimeEvent},
     identity::browser_launch_command,
+    isolation::{IsolationInput, select_capsule_mode},
     restore::{RestoreRequest, RestoreSurfaces, SignalType, build_restore_plan},
     routing::{RouteCommand, RouteOutcome, RouterState, send_command},
     shell::{build_niri_shell_plan, render_shell_script},
@@ -28,6 +29,8 @@ pub struct RestoreRunInput {
     pub route_upstream: String,
     pub routing_socket: Option<PathBuf>,
     pub identity_collision: bool,
+    pub high_risk_secret_workflow: bool,
+    pub force_isolated_mode: bool,
     pub tls_dir: PathBuf,
     pub events_db: PathBuf,
 }
@@ -36,6 +39,7 @@ pub struct RestoreRunInput {
 pub struct RestoreRunSummary {
     pub capsule_id: String,
     pub domain: String,
+    pub run_mode: String,
     pub target_budget_ms: u64,
     pub shell_script: String,
     pub tls_fingerprint_sha256: String,
@@ -53,10 +57,16 @@ pub enum RunFlowError {
 }
 
 pub fn run_restore_flow(input: RestoreRunInput) -> Result<RestoreRunSummary, RunFlowError> {
+    let mode = select_capsule_mode(&IsolationInput {
+        identity_collision_detected: input.identity_collision,
+        high_risk_secret_workflow: input.high_risk_secret_workflow,
+        force_isolated_mode: input.force_isolated_mode,
+    });
+
     let capsule = Capsule::new(
         &input.capsule_id,
         &input.display_name,
-        CapsuleMode::HostDefault,
+        mode,
         input.workspace,
     );
 
@@ -112,6 +122,7 @@ pub fn run_restore_flow(input: RestoreRunInput) -> Result<RestoreRunSummary, Run
     Ok(RestoreRunSummary {
         capsule_id: capsule.capsule_id.clone(),
         domain: capsule.domain(),
+        run_mode: mode_to_str(capsule.mode).to_string(),
         target_budget_ms: restore.target_budget_ms,
         shell_script,
         tls_fingerprint_sha256: tls.fingerprint_sha256,
@@ -172,4 +183,11 @@ fn ensure_route(capsule: &Capsule, input: &RestoreRunInput) -> Result<(), RunFlo
 fn apply_browser_launch_policy(script: String, browser_url: &str, launch_cmd: &str) -> String {
     let default = format!("xdg-open {browser_url}");
     script.replacen(&default, launch_cmd, 1)
+}
+
+fn mode_to_str(mode: CapsuleMode) -> &'static str {
+    match mode {
+        CapsuleMode::HostDefault => "host_default",
+        CapsuleMode::IsolatedNixShell => "isolated_nix_shell",
+    }
 }

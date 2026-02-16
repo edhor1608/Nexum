@@ -5,6 +5,7 @@ pub mod cutover;
 pub mod events;
 pub mod flags;
 pub mod identity;
+pub mod isolation;
 pub mod ports;
 pub mod restore;
 pub mod routing;
