@@ -4,10 +4,8 @@ use std::process::Command;
 fn nexumctl_can_compare_shadow_parity_from_json_inputs() {
     let nexumctl = assert_cmd::cargo::cargo_bin!("nexumctl");
 
-    let primary =
-        r#"{"capsule_id":"cap-cli-parity","step_count":6,"duration_ms":4000,"attention_priority":"active"}"#;
-    let candidate =
-        r#"{"capsule_id":"cap-cli-parity","step_count":5,"duration_ms":5000,"attention_priority":"active"}"#;
+    let primary = r#"{"capsule_id":"cap-cli-parity","step_count":6,"duration_ms":4000,"attention_priority":"active"}"#;
+    let candidate = r#"{"capsule_id":"cap-cli-parity","step_count":5,"duration_ms":5000,"attention_priority":"active"}"#;
 
     let output = Command::new(nexumctl)
         .arg("parity")
