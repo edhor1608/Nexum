@@ -19,6 +19,7 @@ fn snapshot_restore_runner_summary_contract() {
         editor_target: "/workspace/snap".into(),
         browser_url: "https://runner-snap.nexum.local".into(),
         route_upstream: "127.0.0.1:4710".into(),
+        routing_socket: None,
         tls_dir,
         events_db,
     })

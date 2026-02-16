@@ -20,6 +20,7 @@ fn run_restore_flow_returns_script_and_persists_events() {
         editor_target: "/workspace/runner".into(),
         browser_url: "https://runner-api.nexum.local".into(),
         route_upstream: "127.0.0.1:4700".into(),
+        routing_socket: None,
         tls_dir,
         events_db: events_db.clone(),
     })

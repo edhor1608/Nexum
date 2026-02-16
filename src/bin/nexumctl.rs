@@ -393,6 +393,7 @@ fn run_restore(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
         editor_target: required_arg(args, "--editor")?,
         browser_url: required_arg(args, "--browser")?,
         route_upstream: required_arg(args, "--upstream")?,
+        routing_socket: optional_arg(args, "--routing-socket").map(PathBuf::from),
         tls_dir: PathBuf::from(required_arg(args, "--tls-dir")?),
         events_db: PathBuf::from(required_arg(args, "--events-db")?),
     })?;
@@ -477,6 +478,6 @@ fn usage() {
         "nexumctl cutover apply --file <path> --capability <routing|restore|attention> --parity-score <f64> --min-parity-score <f64> --critical-events <u32> --max-critical-events <u32> --shadow-mode <true|false>"
     );
     eprintln!(
-        "nexumctl run restore --capsule-id <id> --name <name> --workspace <n> --signal <needs_decision|critical_failure|passive_completion> --terminal <cmd> --editor <path> --browser <url> --upstream <host:port> --tls-dir <path> --events-db <path>"
+        "nexumctl run restore --capsule-id <id> --name <name> --workspace <n> --signal <needs_decision|critical_failure|passive_completion> --terminal <cmd> --editor <path> --browser <url> --upstream <host:port> [--routing-socket <path>] --tls-dir <path> --events-db <path>"
     );
 }

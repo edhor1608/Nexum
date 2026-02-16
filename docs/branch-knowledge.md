@@ -104,3 +104,13 @@
 ## New Test Coverage (Milestone 10)
 - Routing CLI e2e test validating daemon interaction across health/register/resolve/remove lifecycle.
 - Routing CLI snapshot contract for JSON outcome schema (`RouteOutcome::Registered`).
+
+## Additional Work (Milestone 11)
+- Extended restore runner to support daemon-backed routing registration via optional routing socket.
+- Added `--routing-socket` support to `nexumctl run restore`.
+- Kept fallback behavior for local/in-process routing path when no socket is provided.
+
+## New Test Coverage (Milestone 11)
+- Restore runner daemon integration test validating route registration through `nexumd`.
+- Restore runner daemon conflict test validating domain-claim rejection path.
+- Restore runner CLI e2e test validating `run restore` + `routing resolve` end-to-end with daemon socket.
