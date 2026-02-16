@@ -276,3 +276,31 @@ fn nexumctl_stead_validate_events_reports_missing_capsules_when_db_is_provided()
         Value::Array(vec![Value::String("cap-missing".into())])
     );
 }
+
+#[test]
+fn nexumctl_stead_attention_plan_routes_priorities_and_focus() {
+    let nexumctl = assert_cmd::cargo::cargo_bin!("nexumctl");
+    let events = r#"[{"capsule_id":"cap-passive","signal":"passive_completion","upstream":"127.0.0.1:5100"},{"capsule_id":"cap-active","signal":"needs_decision","upstream":"127.0.0.1:5101"},{"capsule_id":"cap-critical","signal":"critical_failure","upstream":"127.0.0.1:5102"}]"#;
+
+    let out = Command::new(nexumctl)
+        .arg("stead")
+        .arg("attention-plan")
+        .arg("--events-json")
+        .arg(events)
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+
+    let payload: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(payload["blocking"], Value::Number(1u64.into()));
+    assert_eq!(payload["active"], Value::Number(1u64.into()));
+    assert_eq!(payload["passive"], Value::Number(1u64.into()));
+    assert_eq!(payload["requires_ack_count"], Value::Number(2u64.into()));
+    assert_eq!(
+        payload["focus_capsule_id"],
+        Value::String("cap-critical".into())
+    );
+    assert_eq!(payload["routes"][0]["priority"], Value::String("passive".into()));
+    assert_eq!(payload["routes"][1]["priority"], Value::String("active".into()));
+    assert_eq!(payload["routes"][2]["priority"], Value::String("blocking".into()));
+}

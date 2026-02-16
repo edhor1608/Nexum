@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use nexum::{
+    attention::{AttentionEvent, AttentionPolicy, AttentionPriority, RoutedAttention},
     capsule::{Capsule, CapsuleMode, CapsuleState, parse_state, state_to_str},
     cutover::{CutoverInput, apply_cutover, evaluate_cutover, parse_capability},
     events::EventStore,
@@ -770,6 +771,7 @@ fn stead_command(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
         "dispatch" => stead_dispatch(&args[1..]),
         "dispatch-batch" => stead_dispatch_batch(&args[1..]),
         "validate-events" => stead_validate_events(&args[1..]),
+        "attention-plan" => stead_attention_plan(&args[1..]),
         _ => {
             usage();
             std::process::exit(2);
@@ -809,6 +811,16 @@ struct SteadBatchReport {
     succeeded: u32,
     failed: u32,
     results: Vec<SteadBatchResult>,
+}
+
+#[derive(Debug, Serialize)]
+struct SteadAttentionPlan {
+    blocking: u32,
+    active: u32,
+    passive: u32,
+    requires_ack_count: u32,
+    focus_capsule_id: Option<String>,
+    routes: Vec<RoutedAttention>,
 }
 
 fn stead_dispatch_batch(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
@@ -987,6 +999,76 @@ fn stead_validate_events(args: &[String]) -> Result<(), Box<dyn std::error::Erro
         }))?
     );
     Ok(())
+}
+
+fn stead_attention_plan(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let events = parse_dispatch_events(&required_arg(args, "--events-json")?)
+        .map_err(|error| error.to_string())?;
+    let policy = AttentionPolicy;
+
+    let mut blocking = 0u32;
+    let mut active = 0u32;
+    let mut passive = 0u32;
+    let mut requires_ack_count = 0u32;
+    let mut focus_capsule_id = None;
+    let mut focus_priority = 0u8;
+    let mut routes = Vec::with_capacity(events.len());
+
+    for event in events {
+        let routed = policy.route(&AttentionEvent {
+            capsule_id: event.capsule_id.clone(),
+            signal: event.signal,
+            summary: format!(
+                "{} from {}",
+                signal_to_str(event.signal),
+                event.upstream
+            ),
+        });
+        let priority_rank = attention_priority_rank(routed.priority);
+        if priority_rank > focus_priority {
+            focus_priority = priority_rank;
+            focus_capsule_id = Some(routed.capsule_id.clone());
+        }
+
+        if routed.requires_ack {
+            requires_ack_count += 1;
+        }
+
+        match routed.priority {
+            AttentionPriority::Blocking => blocking += 1,
+            AttentionPriority::Active => active += 1,
+            AttentionPriority::Passive => passive += 1,
+        }
+
+        routes.push(routed);
+    }
+
+    let plan = SteadAttentionPlan {
+        blocking,
+        active,
+        passive,
+        requires_ack_count,
+        focus_capsule_id,
+        routes,
+    };
+    println!("{}", serde_json::to_string(&plan)?);
+    Ok(())
+}
+
+fn attention_priority_rank(value: AttentionPriority) -> u8 {
+    match value {
+        AttentionPriority::Blocking => 3,
+        AttentionPriority::Active => 2,
+        AttentionPriority::Passive => 1,
+    }
+}
+
+fn signal_to_str(value: SignalType) -> &'static str {
+    match value {
+        SignalType::NeedsDecision => "needs_decision",
+        SignalType::CriticalFailure => "critical_failure",
+        SignalType::PassiveCompletion => "passive_completion",
+    }
 }
 
 fn run_restore(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
@@ -1186,6 +1268,7 @@ fn usage() {
         "nexumctl stead dispatch-batch --capsule-db <path> --events-json <json-array> [--terminal <cmd>] [--editor <path>] [--browser <url>] [--routing-socket <path>] [--fail-on-missing-capsules <bool>] --tls-dir <path> --events-db <path>"
     );
     eprintln!("nexumctl stead validate-events --events-json <json-array> [--capsule-db <path>]");
+    eprintln!("nexumctl stead attention-plan --events-json <json-array>");
     eprintln!(
         "nexumctl supervisor status --capsule-db <path> --events-db <path> --flags-file <path>"
     );

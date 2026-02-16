@@ -454,3 +454,16 @@ Rationale:
 
 Consequences:
 - Dispatch-batch now supports both best-effort replay and strict atomic preflight modes, with explicit no-side-effect behavior in strict abort paths.
+
+## ADR-IMPL-036
+Context:
+- Stead signal ingestion paths focused on execution and validation, but lacked a side-effect-free projection endpoint for supervisor/UI attention routing.
+
+Decision:
+- Add `stead attention-plan` command that maps a batch of Stead dispatch envelopes into routed attention outputs and aggregate focus metrics.
+
+Rationale:
+- Supports D-002/D-005 direction by exposing control-plane-ready attention state without requiring restore execution.
+
+Consequences:
+- Stead CLI now includes an explicit attention planning surface with snapshot-locked schema suitable for supervisor integration.
