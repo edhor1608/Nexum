@@ -114,3 +114,11 @@
 - Restore runner daemon integration test validating route registration through `nexumd`.
 - Restore runner daemon conflict test validating domain-claim rejection path.
 - Restore runner CLI e2e test validating `run restore` + `routing resolve` end-to-end with daemon socket.
+
+## Additional Work (Milestone 12)
+- Added explicit acceptance-level e2e coverage for parallel restore reliability and restore latency budget.
+- Validated daemon-backed routing list behavior after concurrent restore operations.
+
+## New Test Coverage (Milestone 12)
+- Parallel e2e scenario: 5 concurrent `run restore` operations register 5 deterministic routes.
+- Budget e2e scenario: single `run restore` completes under 10 seconds wall-clock.

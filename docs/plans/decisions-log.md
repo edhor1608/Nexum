@@ -142,3 +142,16 @@ Rationale:
 
 Consequences:
 - Runflow now owns dual-path routing logic (daemon-backed and fallback in-process), which must remain behaviorally consistent.
+
+## ADR-IMPL-012
+Context:
+- v1 acceptance criteria required explicit proof for parallel capsule restore stability and sub-10s restore behavior.
+
+Decision:
+- Add dedicated acceptance-level e2e tests for 5 concurrent capsule restores and wall-clock restore completion budget.
+
+Rationale:
+- Keeps key product outcomes enforced in CI rather than implicit assumptions from lower-level tests.
+
+Consequences:
+- E2E suite runtime grows, but regressions against core v1 outcomes are now caught early.
