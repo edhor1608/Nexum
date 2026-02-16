@@ -141,3 +141,12 @@
 - Isolation policy unit matrix for default mode and all escalation triggers.
 - Restore CLI e2e for high-risk secret mode escalation.
 - Restore runner snapshot contract now locks `run_mode` output.
+
+## Additional Work (Milestone 15)
+- Added runtime metadata module for capsule-scoped env export set and terminal process label conventions.
+- Restore runner now prepends capsule metadata exports to generated shell script before execution commands.
+
+## New Test Coverage (Milestone 15)
+- Runtime metadata unit tests for env contract and process label format.
+- Restore CLI e2e validates shell script includes `NEXUM_*` exports and process label.
+- Restore runner snapshot contract updated with metadata export prelude.

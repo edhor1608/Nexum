@@ -47,6 +47,18 @@ fn nexumctl_run_restore_executes_end_to_end_plan() {
             .unwrap()
             .contains("xdg-open https://runner-cli.nexum.local")
     );
+    assert!(
+        value["shell_script"]
+            .as_str()
+            .unwrap()
+            .contains("export NEXUM_CAPSULE_ID=cap-run-cli")
+    );
+    assert!(
+        value["shell_script"]
+            .as_str()
+            .unwrap()
+            .contains("export NEXUM_PROCESS_LABEL=nexum-terminal-cap-run-cli")
+    );
     assert_eq!(value["run_mode"], Value::String("host_default".into()));
     assert_eq!(value["events_written"], Value::Number(3u64.into()));
 }

@@ -181,3 +181,16 @@ Rationale:
 
 Consequences:
 - Restore input/output contracts expanded, including new mode signal (`run_mode`) that downstream consumers may rely on.
+
+## ADR-IMPL-015
+Context:
+- Isolation policy required capsule-scoped runtime metadata and process-label conventions to improve observability and execution traceability.
+
+Decision:
+- Add `runtime_meta` module and prepend restore shell scripts with `NEXUM_*` exports plus `NEXUM_PROCESS_LABEL`.
+
+Rationale:
+- Makes capsule identity explicit in runtime execution surfaces without changing daemon protocol.
+
+Consequences:
+- Shell script output contract changed and is now guarded by snapshot/e2e tests.

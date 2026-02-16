@@ -13,6 +13,7 @@ use crate::{
     isolation::{IsolationInput, select_capsule_mode},
     restore::{RestoreRequest, RestoreSurfaces, SignalType, build_restore_plan},
     routing::{RouteCommand, RouteOutcome, RouterState, send_command},
+    runtime_meta::{capsule_runtime_env, terminal_process_label},
     shell::{build_niri_shell_plan, render_shell_script},
     tls::{TlsError, ensure_self_signed_cert},
 };
@@ -95,6 +96,7 @@ pub fn run_restore_flow(input: RestoreRunInput) -> Result<RestoreRunSummary, Run
             input.identity_collision,
         ),
     );
+    let shell_script = apply_runtime_metadata(shell_script, &capsule);
 
     let mut events = EventStore::open(&input.events_db)?;
     events.append(RuntimeEvent {
@@ -190,4 +192,17 @@ fn mode_to_str(mode: CapsuleMode) -> &'static str {
         CapsuleMode::HostDefault => "host_default",
         CapsuleMode::IsolatedNixShell => "isolated_nix_shell",
     }
+}
+
+fn apply_runtime_metadata(script: String, capsule: &Capsule) -> String {
+    let mut lines = capsule_runtime_env(capsule)
+        .into_iter()
+        .map(|(key, value)| format!("export {key}={value}"))
+        .collect::<Vec<_>>();
+    lines.push(format!(
+        "export NEXUM_PROCESS_LABEL={}",
+        terminal_process_label(&capsule.capsule_id)
+    ));
+    lines.push(script);
+    lines.join("\n")
 }
