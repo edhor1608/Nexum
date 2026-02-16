@@ -122,3 +122,12 @@
 ## New Test Coverage (Milestone 12)
 - Parallel e2e scenario: 5 concurrent `run restore` operations register 5 deterministic routes.
 - Budget e2e scenario: single `run restore` completes under 10 seconds wall-clock.
+
+## Additional Work (Milestone 13)
+- Added identity policy module for browser launch strategy with collision-aware profile fallback.
+- Extended restore runner input/CLI with `--identity-collision` to activate profile fallback path.
+- Wired restore shell script generation to swap default browser launch command when collision is signaled.
+
+## New Test Coverage (Milestone 13)
+- Identity policy unit tests for domain-default and collision fallback command generation.
+- Restore runner CLI e2e for collision-driven profile fallback behavior.

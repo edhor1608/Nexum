@@ -155,3 +155,16 @@ Rationale:
 
 Consequences:
 - E2E suite runtime grows, but regressions against core v1 outcomes are now caught early.
+
+## ADR-IMPL-013
+Context:
+- Hybrid identity strategy required profile fallback behavior when domain isolation is insufficient due detected session collision.
+
+Decision:
+- Add `identity` policy module and restore CLI/runflow input flag (`--identity-collision`) to switch browser launch from `xdg-open` to dedicated profile command.
+
+Rationale:
+- Preserves domain-first default behavior while enabling deterministic fallback path for collision cases.
+
+Consequences:
+- Restore command contract now includes collision signaling input, and shell script generation includes policy-specific browser launch substitution.

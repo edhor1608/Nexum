@@ -9,6 +9,7 @@ use thiserror::Error;
 use crate::{
     capsule::{Capsule, CapsuleMode},
     events::{EventError, EventStore, RuntimeEvent},
+    identity::browser_launch_command,
     restore::{RestoreRequest, RestoreSurfaces, SignalType, build_restore_plan},
     routing::{RouteCommand, RouteOutcome, RouterState, send_command},
     shell::{build_niri_shell_plan, render_shell_script},
@@ -26,6 +27,7 @@ pub struct RestoreRunInput {
     pub browser_url: String,
     pub route_upstream: String,
     pub routing_socket: Option<PathBuf>,
+    pub identity_collision: bool,
     pub tls_dir: PathBuf,
     pub events_db: PathBuf,
 }
@@ -74,7 +76,15 @@ pub fn run_restore_flow(input: RestoreRunInput) -> Result<RestoreRunSummary, Run
 
     ensure_route(&capsule, &input)?;
 
-    let shell_script = render_shell_script(&build_niri_shell_plan(&restore));
+    let shell_script = apply_browser_launch_policy(
+        render_shell_script(&build_niri_shell_plan(&restore)),
+        &input.browser_url,
+        &browser_launch_command(
+            &input.browser_url,
+            &input.capsule_id,
+            input.identity_collision,
+        ),
+    );
 
     let mut events = EventStore::open(&input.events_db)?;
     events.append(RuntimeEvent {
@@ -157,4 +167,9 @@ fn ensure_route(capsule: &Capsule, input: &RestoreRunInput) -> Result<(), RunFlo
     }
 
     Ok(())
+}
+
+fn apply_browser_launch_policy(script: String, browser_url: &str, launch_cmd: &str) -> String {
+    let default = format!("xdg-open {browser_url}");
+    script.replacen(&default, launch_cmd, 1)
 }

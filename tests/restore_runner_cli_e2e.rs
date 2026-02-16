@@ -121,3 +121,64 @@ fn nexumctl_run_restore_registers_route_via_daemon_socket() {
     daemon.kill().unwrap();
     let _ = daemon.wait();
 }
+
+#[test]
+fn nexumctl_run_restore_uses_profile_fallback_when_identity_collision_flag_is_set() {
+    let dir = tempdir().unwrap();
+    let socket = dir.path().join("nexumd.sock");
+    let tls_dir = dir.path().join("tls");
+    let events_db = dir.path().join("events.sqlite3");
+
+    let mut daemon = Command::new(assert_cmd::cargo::cargo_bin!("nexumd"))
+        .arg("serve")
+        .arg("--socket")
+        .arg(&socket)
+        .spawn()
+        .unwrap();
+    for _ in 0..40 {
+        if socket.exists() {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(25));
+    }
+
+    let nexumctl = assert_cmd::cargo::cargo_bin!("nexumctl");
+    let out = Command::new(nexumctl)
+        .arg("run")
+        .arg("restore")
+        .arg("--capsule-id")
+        .arg("cap-run-cli-collision")
+        .arg("--name")
+        .arg("Runner Collision")
+        .arg("--workspace")
+        .arg("3")
+        .arg("--signal")
+        .arg("needs_decision")
+        .arg("--terminal")
+        .arg("cd /workspace/collision && nix develop")
+        .arg("--editor")
+        .arg("/workspace/collision")
+        .arg("--browser")
+        .arg("https://runner-collision.nexum.local")
+        .arg("--upstream")
+        .arg("127.0.0.1:4750")
+        .arg("--routing-socket")
+        .arg(&socket)
+        .arg("--identity-collision")
+        .arg("true")
+        .arg("--tls-dir")
+        .arg(&tls_dir)
+        .arg("--events-db")
+        .arg(&events_db)
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+
+    let value: Value = serde_json::from_slice(&out.stdout).unwrap();
+    let script = value["shell_script"].as_str().unwrap();
+    assert!(script.contains("firefox --profile"));
+    assert!(script.contains("runner-collision.nexum.local"));
+
+    daemon.kill().unwrap();
+    let _ = daemon.wait();
+}
