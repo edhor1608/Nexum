@@ -363,3 +363,16 @@ Rationale:
 
 Consequences:
 - Cutover CLI now supports both capsule-scoped and global-summary event gate inputs.
+
+## ADR-IMPL-029
+Context:
+- Newly added supervisor outputs introduced broader machine-consumed JSON surfaces without pinned snapshot contracts.
+
+Decision:
+- Add snapshot contract tests for `supervisor status` and `supervisor blockers`.
+
+Rationale:
+- Protects supervisor integration surfaces from accidental schema drift during further control-plane evolution.
+
+Consequences:
+- Supervisor payload changes now require explicit snapshot updates, improving review visibility for contract changes.

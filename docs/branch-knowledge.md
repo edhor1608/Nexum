@@ -276,3 +276,12 @@
 ## New Test Coverage (Milestone 28)
 - Cutover events CLI e2e for global-summary allow case (within threshold).
 - Cutover events CLI e2e for global-summary deny case (threshold exceeded).
+
+## Additional Work (Milestone 29)
+- Added snapshot contract coverage for supervisor control-plane surfaces.
+- Locked YAML contracts for:
+  - `supervisor status` payload shape
+  - `supervisor blockers` payload shape
+
+## New Test Coverage (Milestone 29)
+- Snapshot tests for supervisor status/blockers output contracts.
