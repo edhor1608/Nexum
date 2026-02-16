@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use rusqlite::{Connection, params};
+use rusqlite::{Connection, params, params_from_iter};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -159,5 +159,53 @@ impl EventStore {
             critical_events,
             capsules,
         })
+    }
+
+    pub fn list_recent(
+        &self,
+        capsule_id: Option<&str>,
+        level: Option<&str>,
+        limit: Option<u32>,
+    ) -> Result<Vec<RuntimeEvent>, EventError> {
+        let mut query = String::from(
+            "
+            SELECT capsule_id, component, level, message, ts_unix_ms
+            FROM runtime_events
+            ",
+        );
+        let mut predicates = Vec::new();
+        let mut values = Vec::new();
+
+        if let Some(capsule_id) = capsule_id {
+            predicates.push("capsule_id = ?");
+            values.push(rusqlite::types::Value::Text(capsule_id.to_string()));
+        }
+        if let Some(level) = level {
+            predicates.push("level = ?");
+            values.push(rusqlite::types::Value::Text(level.to_string()));
+        }
+        if !predicates.is_empty() {
+            query.push_str(" WHERE ");
+            query.push_str(&predicates.join(" AND "));
+        }
+        query.push_str(" ORDER BY ts_unix_ms DESC, id DESC");
+        if let Some(limit) = limit {
+            query.push_str(" LIMIT ?");
+            values.push(rusqlite::types::Value::Integer(limit as i64));
+        }
+
+        let mut stmt = self.conn.prepare(&query)?;
+        let rows = stmt
+            .query_map(params_from_iter(values), |row| {
+                Ok(RuntimeEvent {
+                    capsule_id: row.get(0)?,
+                    component: row.get(1)?,
+                    level: row.get(2)?,
+                    message: row.get(3)?,
+                    ts_unix_ms: row.get(4)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(rows)
     }
 }

@@ -298,3 +298,16 @@ Rationale:
 
 Consequences:
 - CLI surface expands with store-driven restore entrypoint and explicit validation when repo metadata is insufficient for default surface derivation.
+
+## ADR-IMPL-024
+Context:
+- Event observability offered summary and capsule-specific history, but lacked a supervisor-friendly query surface for recent filtered events.
+
+Decision:
+- Add filtered event query support in store and expose it via `nexumctl events list`.
+
+Rationale:
+- Enables direct runtime triage workflows (critical-only, capsule-scoped, bounded recent lists) without external SQL tooling.
+
+Consequences:
+- Events CLI contract expands with list query flags and deterministic newest-first ordering semantics.

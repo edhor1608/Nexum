@@ -244,6 +244,7 @@ fn events_command(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
 
     match args[0].as_str() {
         "summary" => events_summary(&args[1..]),
+        "list" => events_list(&args[1..]),
         _ => {
             usage();
             std::process::exit(2);
@@ -256,6 +257,20 @@ fn events_summary(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let store = EventStore::open(&PathBuf::from(db))?;
     let summary = store.summary()?;
     println!("{}", serde_json::to_string(&summary)?);
+    Ok(())
+}
+
+fn events_list(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let db = required_arg(args, "--db")?;
+    let capsule_id = optional_arg(args, "--capsule-id");
+    let level = optional_arg(args, "--level");
+    let limit = optional_arg(args, "--limit")
+        .map(|value| value.parse::<u32>())
+        .transpose()?;
+
+    let store = EventStore::open(&PathBuf::from(db))?;
+    let listed = store.list_recent(capsule_id.as_deref(), level.as_deref(), limit)?;
+    println!("{}", serde_json::to_string(&listed)?);
     Ok(())
 }
 
@@ -694,6 +709,9 @@ fn usage() {
     eprintln!("nexumctl flags show --file <path>");
     eprintln!("nexumctl parity compare --primary-json <json> --candidate-json <json>");
     eprintln!("nexumctl events summary --db <path>");
+    eprintln!(
+        "nexumctl events list --db <path> [--capsule-id <id>] [--level <level>] [--limit <n>]"
+    );
     eprintln!("nexumctl routing health [--socket <path>]");
     eprintln!(
         "nexumctl routing register --capsule-id <id> --domain <domain> --upstream <host:port> [--socket <path>]"

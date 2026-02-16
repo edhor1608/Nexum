@@ -226,3 +226,15 @@
 ## New Test Coverage (Milestone 23)
 - Restore CLI e2e validating metadata-derived restore defaults from capsule store.
 - Restore CLI e2e validating strict failure when `repo_path` is missing and no explicit terminal/editor are provided.
+
+## Additional Work (Milestone 24)
+- Added filtered event query support in runtime event store (`list_recent`).
+- Added `nexumctl events list` command with optional filters:
+  - `--capsule-id`
+  - `--level`
+  - `--limit`
+- Event list output is ordered by newest first (`ts_unix_ms` then insertion id).
+
+## New Test Coverage (Milestone 24)
+- Observability integration test for filtered + limited recent event queries.
+- Events CLI e2e for `events list` filter and limit behavior.
