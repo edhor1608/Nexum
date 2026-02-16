@@ -160,3 +160,12 @@
 - Store integration test for explicit lifecycle state transition persistence.
 - Capsule lifecycle CLI e2e for rename + state transition flow.
 - Capsule/store snapshots updated to lock state field in contract exports.
+
+## Additional Work (Milestone 17)
+- Added persisted capsule port allocation table in SQLite store (`capsule_ports`).
+- Added store-level deterministic `allocate_port` and `release_ports` operations with stable per-capsule allocation.
+- Extended capsule CLI with `allocate-port` and `release-ports`, and exposed `allocated_ports` in `capsule list`.
+
+## New Test Coverage (Milestone 17)
+- Store integration test for stable allocation + reuse after release.
+- Capsule ports CLI e2e for allocate/list/release behavior.

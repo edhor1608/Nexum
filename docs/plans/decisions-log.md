@@ -207,3 +207,16 @@ Rationale:
 
 Consequences:
 - Capsule serialization and YAML export contracts changed to include `state`.
+
+## ADR-IMPL-017
+Context:
+- Capsule specification required allocate/release port operations, but implementation only had an in-memory allocator disconnected from persisted capsule operations.
+
+Decision:
+- Add persisted `capsule_ports` mapping in SQLite and expose deterministic allocation/release through store + CLI commands.
+
+Rationale:
+- Keeps port ownership durable across process restarts while retaining predictable allocation semantics.
+
+Consequences:
+- Capsule list output now includes `allocated_ports`, and CLI contract expands with port lifecycle commands.

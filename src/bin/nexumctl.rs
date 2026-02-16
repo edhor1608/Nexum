@@ -49,6 +49,8 @@ fn capsule_command(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
         "list" => capsule_list(&args[1..]),
         "rename" => capsule_rename(&args[1..]),
         "set-state" => capsule_set_state(&args[1..]),
+        "allocate-port" => capsule_allocate_port(&args[1..]),
+        "release-ports" => capsule_release_ports(&args[1..]),
         _ => {
             usage();
             std::process::exit(2);
@@ -78,20 +80,20 @@ fn capsule_list(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let store = CapsuleStore::open(&PathBuf::from(db))?;
     let listed = store.list()?;
 
-    let payload = listed
-        .into_iter()
-        .map(|capsule| {
-            serde_json::json!({
-                "capsule_id": capsule.capsule_id,
-                "slug": capsule.slug,
-                "domain": capsule.domain(),
-                "display_name": capsule.display_name,
-                "mode": mode_to_str(capsule.mode),
-                "state": state_to_str(capsule.state),
-                "workspace": capsule.workspace,
-            })
-        })
-        .collect::<Vec<_>>();
+    let mut payload = Vec::with_capacity(listed.len());
+    for capsule in listed {
+        let allocated_ports = store.list_ports(&capsule.capsule_id)?;
+        payload.push(serde_json::json!({
+            "capsule_id": capsule.capsule_id,
+            "slug": capsule.slug,
+            "domain": capsule.domain(),
+            "display_name": capsule.display_name,
+            "mode": mode_to_str(capsule.mode),
+            "state": state_to_str(capsule.state),
+            "workspace": capsule.workspace,
+            "allocated_ports": allocated_ports,
+        }));
+    }
 
     println!("{}", serde_json::to_string(&payload)?);
     Ok(())
@@ -112,13 +114,47 @@ fn capsule_rename(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
 fn capsule_set_state(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let db = required_arg(args, "--db")?;
     let id = required_arg(args, "--id")?;
-    let state = parse_state(&required_arg(args, "--state")?)
-        .ok_or_else(|| "invalid state".to_string())?;
+    let state =
+        parse_state(&required_arg(args, "--state")?).ok_or_else(|| "invalid state".to_string())?;
 
     let mut store = CapsuleStore::open(&PathBuf::from(db))?;
     store.transition_state(&id, state)?;
 
     println!("state_updated {}", id);
+    Ok(())
+}
+
+fn capsule_allocate_port(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let db = required_arg(args, "--db")?;
+    let id = required_arg(args, "--id")?;
+    let start = required_arg(args, "--start")?.parse::<u16>()?;
+    let end = required_arg(args, "--end")?.parse::<u16>()?;
+
+    let mut store = CapsuleStore::open(&PathBuf::from(db))?;
+    let port = store.allocate_port(&id, start, end)?;
+    println!(
+        "{}",
+        serde_json::to_string(&serde_json::json!({
+            "capsule_id": id,
+            "port": port,
+        }))?
+    );
+    Ok(())
+}
+
+fn capsule_release_ports(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let db = required_arg(args, "--db")?;
+    let id = required_arg(args, "--id")?;
+
+    let mut store = CapsuleStore::open(&PathBuf::from(db))?;
+    let released = store.release_ports(&id)?;
+    println!(
+        "{}",
+        serde_json::to_string(&serde_json::json!({
+            "capsule_id": id,
+            "released": released,
+        }))?
+    );
     Ok(())
 }
 
@@ -504,6 +540,8 @@ fn usage() {
     eprintln!(
         "nexumctl capsule set-state --db <path> --id <id> --state <creating|ready|restoring|degraded|archived>"
     );
+    eprintln!("nexumctl capsule allocate-port --db <path> --id <id> --start <u16> --end <u16>");
+    eprintln!("nexumctl capsule release-ports --db <path> --id <id>");
     eprintln!(
         "nexumctl flags set --file <path> [--shadow true|false] [--routing true|false] [--restore true|false] [--attention true|false]"
     );

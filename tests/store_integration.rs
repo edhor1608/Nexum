@@ -76,3 +76,39 @@ fn store_supports_lifecycle_state_transition() {
     let loaded = store.get("cap-store-4").unwrap().unwrap();
     assert_eq!(loaded.state, nexum::capsule::CapsuleState::Degraded);
 }
+
+#[test]
+fn store_allocates_stable_capsule_ports_and_releases_them() {
+    let dir = tempdir().unwrap();
+    let db = dir.path().join("capsules.sqlite3");
+
+    let mut store = CapsuleStore::open(&db).unwrap();
+    store
+        .upsert(Capsule::new(
+            "cap-store-ports",
+            "Ports Capsule",
+            CapsuleMode::HostDefault,
+            5,
+        ))
+        .unwrap();
+
+    let first = store
+        .allocate_port("cap-store-ports", 6100, 6103)
+        .unwrap()
+        .unwrap();
+    let second = store
+        .allocate_port("cap-store-ports", 6100, 6103)
+        .unwrap()
+        .unwrap();
+    assert_eq!(first, second);
+    assert_eq!(first, 6100);
+
+    let released = store.release_ports("cap-store-ports").unwrap();
+    assert_eq!(released, 1);
+
+    let reassigned = store
+        .allocate_port("cap-store-other", 6100, 6103)
+        .unwrap()
+        .unwrap();
+    assert_eq!(reassigned, 6100);
+}

@@ -37,6 +37,10 @@ impl CapsuleStore {
                 state TEXT NOT NULL DEFAULT 'ready',
                 workspace INTEGER NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS capsule_ports (
+                capsule_id TEXT NOT NULL,
+                port INTEGER NOT NULL PRIMARY KEY
+            );
             ",
         )?;
         add_state_column_if_missing(&conn)?;
@@ -118,6 +122,55 @@ impl CapsuleStore {
             params![display_name, capsule_id],
         )?;
         Ok(())
+    }
+
+    pub fn list_ports(&self, capsule_id: &str) -> Result<Vec<u16>, StoreError> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT port FROM capsule_ports WHERE capsule_id = ?1 ORDER BY port ASC")?;
+        let ports = stmt
+            .query_map(params![capsule_id], |row| row.get::<_, u16>(0))?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(ports)
+    }
+
+    pub fn allocate_port(
+        &mut self,
+        capsule_id: &str,
+        start: u16,
+        end: u16,
+    ) -> Result<Option<u16>, StoreError> {
+        if let Some(existing) = self
+            .conn
+            .query_row(
+                "SELECT port FROM capsule_ports WHERE capsule_id = ?1 ORDER BY port ASC LIMIT 1",
+                params![capsule_id],
+                |row| row.get::<_, u16>(0),
+            )
+            .optional()?
+        {
+            return Ok(Some(existing));
+        }
+
+        for candidate in start..=end {
+            let inserted = self.conn.execute(
+                "INSERT OR IGNORE INTO capsule_ports (capsule_id, port) VALUES (?1, ?2)",
+                params![capsule_id, candidate],
+            )?;
+            if inserted == 1 {
+                return Ok(Some(candidate));
+            }
+        }
+
+        Ok(None)
+    }
+
+    pub fn release_ports(&mut self, capsule_id: &str) -> Result<u32, StoreError> {
+        let released = self.conn.execute(
+            "DELETE FROM capsule_ports WHERE capsule_id = ?1",
+            params![capsule_id],
+        )?;
+        Ok(released as u32)
     }
 }
 
