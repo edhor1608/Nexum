@@ -247,3 +247,14 @@
 ## New Test Coverage (Milestone 25)
 - Stead CLI e2e for successful envelope-driven restore dispatch.
 - Stead CLI e2e for strict rejection of invalid event payloads.
+
+## Additional Work (Milestone 26)
+- Added `nexumctl supervisor status` command for unified control-plane health visibility.
+- Status report now combines:
+  - current cutover flags
+  - capsule lifecycle inventory (total/degraded/archived)
+  - per-capsule critical-event counts
+  - last event metadata per capsule (level/message/timestamp)
+
+## New Test Coverage (Milestone 26)
+- Supervisor CLI e2e validating aggregated capsule health + event health report contract.

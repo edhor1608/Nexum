@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use nexum::{
-    capsule::{Capsule, CapsuleMode, parse_state, state_to_str},
+    capsule::{Capsule, CapsuleMode, CapsuleState, parse_state, state_to_str},
     cutover::{CutoverInput, apply_cutover, evaluate_cutover, parse_capability},
     events::EventStore,
     flags::{CutoverFlags, FlagName},
@@ -14,6 +14,7 @@ use nexum::{
     store::CapsuleStore,
     tls::{ensure_self_signed_cert, rotate_if_expiring},
 };
+use serde::Serialize;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = std::env::args().skip(1).collect::<Vec<_>>();
@@ -30,6 +31,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "routing" => routing_command(&args[1..])?,
         "shell" => shell_command(&args[1..])?,
         "stead" => stead_command(&args[1..])?,
+        "supervisor" => supervisor_command(&args[1..])?,
         "tls" => tls_command(&args[1..])?,
         "cutover" => cutover_command(&args[1..])?,
         "run" => run_command(&args[1..])?,
@@ -39,6 +41,103 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
+    Ok(())
+}
+
+#[derive(Debug, Serialize)]
+struct SupervisorCapsuleStatus {
+    capsule_id: String,
+    display_name: String,
+    repo_path: String,
+    mode: String,
+    state: String,
+    workspace: u16,
+    critical_events: u32,
+    last_event_level: Option<String>,
+    last_event_message: Option<String>,
+    last_event_ts_unix_ms: Option<u64>,
+}
+
+#[derive(Debug, Serialize)]
+struct SupervisorStatusReport {
+    flags: CutoverFlags,
+    total_capsules: u32,
+    degraded_capsules: u32,
+    archived_capsules: u32,
+    critical_events: u32,
+    capsules: Vec<SupervisorCapsuleStatus>,
+}
+
+fn supervisor_command(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    if args.is_empty() {
+        usage();
+        std::process::exit(2);
+    }
+
+    match args[0].as_str() {
+        "status" => supervisor_status(&args[1..]),
+        _ => {
+            usage();
+            std::process::exit(2);
+        }
+    }
+}
+
+fn supervisor_status(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let capsule_db = PathBuf::from(required_arg(args, "--capsule-db")?);
+    let events_db = PathBuf::from(required_arg(args, "--events-db")?);
+    let flags_file = PathBuf::from(required_arg(args, "--flags-file")?);
+
+    let store = CapsuleStore::open(&capsule_db)?;
+    let events = EventStore::open(&events_db)?;
+    let flags = CutoverFlags::load_or_default(&flags_file)?;
+    let listed = store.list()?;
+
+    let mut degraded_capsules = 0u32;
+    let mut archived_capsules = 0u32;
+    let mut critical_events = 0u32;
+    let mut capsules = Vec::with_capacity(listed.len());
+
+    for capsule in listed {
+        if capsule.state == CapsuleState::Degraded {
+            degraded_capsules += 1;
+        }
+        if capsule.state == CapsuleState::Archived {
+            archived_capsules += 1;
+        }
+
+        let capsule_critical = events.count_for_capsule_level(&capsule.capsule_id, "critical")?;
+        critical_events += capsule_critical;
+
+        let last = events
+            .list_recent(Some(&capsule.capsule_id), None, Some(1))?
+            .into_iter()
+            .next();
+
+        capsules.push(SupervisorCapsuleStatus {
+            capsule_id: capsule.capsule_id,
+            display_name: capsule.display_name,
+            repo_path: capsule.repo_path,
+            mode: mode_to_str(capsule.mode).to_string(),
+            state: state_to_str(capsule.state).to_string(),
+            workspace: capsule.workspace,
+            critical_events: capsule_critical,
+            last_event_level: last.as_ref().map(|value| value.level.clone()),
+            last_event_message: last.as_ref().map(|value| value.message.clone()),
+            last_event_ts_unix_ms: last.as_ref().map(|value| value.ts_unix_ms),
+        });
+    }
+
+    let report = SupervisorStatusReport {
+        flags,
+        total_capsules: capsules.len() as u32,
+        degraded_capsules,
+        archived_capsules,
+        critical_events,
+        capsules,
+    };
+
+    println!("{}", serde_json::to_string(&report)?);
     Ok(())
 }
 
@@ -798,6 +897,9 @@ fn usage() {
     );
     eprintln!(
         "nexumctl stead dispatch --capsule-db <path> --event-json <json> [--terminal <cmd>] [--editor <path>] [--browser <url>] [--routing-socket <path>] --tls-dir <path> --events-db <path>"
+    );
+    eprintln!(
+        "nexumctl supervisor status --capsule-db <path> --events-db <path> --flags-file <path>"
     );
     eprintln!("nexumctl tls ensure --dir <path> --domain <domain> [--validity-days <days>]");
     eprintln!("nexumctl tls rotate --dir <path> --domain <domain> --threshold-days <days>");

@@ -324,3 +324,16 @@ Rationale:
 
 Consequences:
 - CLI surface expands with Stead dispatch entrypoint; invalid envelopes now fail fast with explicit parse errors.
+
+## ADR-IMPL-026
+Context:
+- Operators had to manually combine capsule state, cutover flags, and runtime events from multiple commands for health triage.
+
+Decision:
+- Add unified `nexumctl supervisor status` report command.
+
+Rationale:
+- Reduces supervision friction by providing one deterministic machine-readable status payload for control-plane triage.
+
+Consequences:
+- CLI surface expands with supervisor health endpoint and per-capsule last-event metadata contract.
