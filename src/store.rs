@@ -33,6 +33,7 @@ impl CapsuleStore {
                 capsule_id TEXT PRIMARY KEY,
                 slug TEXT NOT NULL,
                 display_name TEXT NOT NULL,
+                repo_path TEXT NOT NULL DEFAULT '',
                 mode TEXT NOT NULL,
                 state TEXT NOT NULL DEFAULT 'ready',
                 workspace INTEGER NOT NULL
@@ -44,6 +45,7 @@ impl CapsuleStore {
             ",
         )?;
         add_state_column_if_missing(&conn)?;
+        add_repo_path_column_if_missing(&conn)?;
 
         Ok(Self { conn })
     }
@@ -51,11 +53,12 @@ impl CapsuleStore {
     pub fn upsert(&mut self, capsule: Capsule) -> Result<(), StoreError> {
         self.conn.execute(
             "
-            INSERT INTO capsules (capsule_id, slug, display_name, mode, state, workspace)
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+            INSERT INTO capsules (capsule_id, slug, display_name, repo_path, mode, state, workspace)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
             ON CONFLICT(capsule_id) DO UPDATE SET
                 slug = excluded.slug,
                 display_name = excluded.display_name,
+                repo_path = excluded.repo_path,
                 mode = excluded.mode,
                 state = excluded.state,
                 workspace = excluded.workspace
@@ -64,6 +67,7 @@ impl CapsuleStore {
                 capsule.capsule_id,
                 capsule.slug,
                 capsule.display_name,
+                capsule.repo_path,
                 mode_to_str(capsule.mode),
                 state_to_str(capsule.state),
                 capsule.workspace
@@ -75,7 +79,7 @@ impl CapsuleStore {
     pub fn get(&self, capsule_id: &str) -> Result<Option<Capsule>, StoreError> {
         self.conn
             .query_row(
-                "SELECT capsule_id, slug, display_name, mode, state, workspace FROM capsules WHERE capsule_id = ?1",
+                "SELECT capsule_id, slug, display_name, repo_path, mode, state, workspace FROM capsules WHERE capsule_id = ?1",
                 params![capsule_id],
                 row_to_capsule,
             )
@@ -85,7 +89,7 @@ impl CapsuleStore {
 
     pub fn list(&self) -> Result<Vec<Capsule>, StoreError> {
         let mut stmt = self.conn.prepare(
-            "SELECT capsule_id, slug, display_name, mode, state, workspace FROM capsules ORDER BY capsule_id ASC",
+            "SELECT capsule_id, slug, display_name, repo_path, mode, state, workspace FROM capsules ORDER BY capsule_id ASC",
         )?;
 
         let rows = stmt
@@ -120,6 +124,14 @@ impl CapsuleStore {
         self.conn.execute(
             "UPDATE capsules SET display_name = ?1 WHERE capsule_id = ?2",
             params![display_name, capsule_id],
+        )?;
+        Ok(())
+    }
+
+    pub fn set_repo_path(&mut self, capsule_id: &str, repo_path: &str) -> Result<(), StoreError> {
+        self.conn.execute(
+            "UPDATE capsules SET repo_path = ?1 WHERE capsule_id = ?2",
+            params![repo_path, capsule_id],
         )?;
         Ok(())
     }
@@ -175,15 +187,16 @@ impl CapsuleStore {
 }
 
 fn row_to_capsule(row: &rusqlite::Row<'_>) -> rusqlite::Result<Capsule> {
-    let mode: String = row.get(3)?;
-    let state: String = row.get(4)?;
+    let mode: String = row.get(4)?;
+    let state: String = row.get(5)?;
     Ok(Capsule {
         capsule_id: row.get(0)?,
         slug: row.get(1)?,
         display_name: row.get(2)?,
+        repo_path: row.get(3)?,
         mode: parse_mode(&mode),
         state: parse_state(&state).unwrap_or(CapsuleState::Ready),
-        workspace: row.get(5)?,
+        workspace: row.get(6)?,
     })
 }
 
@@ -204,6 +217,21 @@ fn mode_to_str(mode: CapsuleMode) -> &'static str {
 fn add_state_column_if_missing(conn: &Connection) -> Result<(), StoreError> {
     match conn.execute(
         "ALTER TABLE capsules ADD COLUMN state TEXT NOT NULL DEFAULT 'ready'",
+        [],
+    ) {
+        Ok(_) => Ok(()),
+        Err(rusqlite::Error::SqliteFailure(_, Some(message)))
+            if message.contains("duplicate column name") =>
+        {
+            Ok(())
+        }
+        Err(error) => Err(StoreError::Db(error)),
+    }
+}
+
+fn add_repo_path_column_if_missing(conn: &Connection) -> Result<(), StoreError> {
+    match conn.execute(
+        "ALTER TABLE capsules ADD COLUMN repo_path TEXT NOT NULL DEFAULT ''",
         [],
     ) {
         Ok(_) => Ok(()),

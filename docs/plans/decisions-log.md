@@ -246,3 +246,16 @@ Rationale:
 
 Consequences:
 - Cutover CLI surface now includes an event-store dependent path in addition to manual gate-input path.
+
+## ADR-IMPL-020
+Context:
+- Capsule specification required persisted repository path metadata per capsule, but capsule contract and storage did not include it.
+
+Decision:
+- Add `repo_path` to capsule model, persist it in SQLite (with migration-safe column addition), and expose CLI mutation/query paths.
+
+Rationale:
+- Enables restore and supervision flows to carry explicit workspace-root metadata as part of capsule state.
+
+Consequences:
+- Capsule serialization and list/export contracts changed to include `repo_path`.

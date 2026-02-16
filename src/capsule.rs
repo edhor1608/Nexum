@@ -22,6 +22,7 @@ pub struct Capsule {
     pub capsule_id: String,
     pub slug: String,
     pub display_name: String,
+    pub repo_path: String,
     pub mode: CapsuleMode,
     pub state: CapsuleState,
     pub workspace: u16,
@@ -33,6 +34,7 @@ impl Capsule {
             capsule_id: capsule_id.to_string(),
             slug: normalize_slug(display_name),
             display_name: display_name.to_string(),
+            repo_path: String::new(),
             mode,
             state: CapsuleState::Ready,
             workspace,
@@ -49,6 +51,15 @@ impl Capsule {
 
     pub fn transition_state(&mut self, state: CapsuleState) {
         self.state = state;
+    }
+
+    pub fn with_repo_path(mut self, repo_path: &str) -> Self {
+        self.repo_path = repo_path.to_string();
+        self
+    }
+
+    pub fn set_repo_path(&mut self, repo_path: &str) {
+        self.repo_path = repo_path.to_string();
     }
 }
 

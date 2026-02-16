@@ -187,3 +187,14 @@
 
 ## New Test Coverage (Milestone 19)
 - Cutover CLI e2e tests for event-driven allow and deny cases based on critical event threshold.
+
+## Additional Work (Milestone 20)
+- Added `repo_path` to capsule contract and SQLite persistence.
+- Added migration-safe repo path column handling for existing capsule stores.
+- Extended capsule CLI with `set-repo` and optional `--repo-path` on create.
+- Exposed `repo_path` in `capsule list` output.
+
+## New Test Coverage (Milestone 20)
+- Store integration test for repo-path persistence.
+- Capsule lifecycle CLI e2e updated to validate repo-path mutation.
+- Capsule and store snapshots updated for repo-path contract field.

@@ -112,3 +112,20 @@ fn store_allocates_stable_capsule_ports_and_releases_them() {
         .unwrap();
     assert_eq!(reassigned, 6100);
 }
+
+#[test]
+fn store_persists_capsule_repo_path_updates() {
+    let dir = tempdir().unwrap();
+    let db = dir.path().join("capsules.sqlite3");
+
+    let mut store = CapsuleStore::open(&db).unwrap();
+    store
+        .upsert(
+            Capsule::new("cap-store-repo", "Repo Capsule", CapsuleMode::HostDefault, 6)
+                .with_repo_path("/workspace/repo-capsule"),
+        )
+        .unwrap();
+
+    let loaded = store.get("cap-store-repo").unwrap().unwrap();
+    assert_eq!(loaded.repo_path, "/workspace/repo-capsule");
+}

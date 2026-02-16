@@ -49,6 +49,7 @@ fn capsule_command(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
         "create" => capsule_create(&args[1..]),
         "list" => capsule_list(&args[1..]),
         "rename" => capsule_rename(&args[1..]),
+        "set-repo" => capsule_set_repo(&args[1..]),
         "set-state" => capsule_set_state(&args[1..]),
         "allocate-port" => capsule_allocate_port(&args[1..]),
         "release-ports" => capsule_release_ports(&args[1..]),
@@ -65,11 +66,12 @@ fn capsule_create(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let name = required_arg(args, "--name")?;
     let workspace = required_arg(args, "--workspace")?.parse::<u16>()?;
     let mode = required_arg(args, "--mode")?;
+    let repo_path = optional_arg(args, "--repo-path").unwrap_or_default();
 
     let mode = parse_mode(&mode)?;
 
     let mut store = CapsuleStore::open(&PathBuf::from(db))?;
-    let capsule = Capsule::new(&id, &name, mode, workspace);
+    let capsule = Capsule::new(&id, &name, mode, workspace).with_repo_path(&repo_path);
     store.upsert(capsule)?;
 
     println!("created {}", id);
@@ -89,6 +91,7 @@ fn capsule_list(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
             "slug": capsule.slug,
             "domain": capsule.domain(),
             "display_name": capsule.display_name,
+            "repo_path": capsule.repo_path,
             "mode": mode_to_str(capsule.mode),
             "state": state_to_str(capsule.state),
             "workspace": capsule.workspace,
@@ -122,6 +125,18 @@ fn capsule_set_state(args: &[String]) -> Result<(), Box<dyn std::error::Error>> 
     store.transition_state(&id, state)?;
 
     println!("state_updated {}", id);
+    Ok(())
+}
+
+fn capsule_set_repo(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let db = required_arg(args, "--db")?;
+    let id = required_arg(args, "--id")?;
+    let repo_path = required_arg(args, "--repo-path")?;
+
+    let mut store = CapsuleStore::open(&PathBuf::from(db))?;
+    store.set_repo_path(&id, &repo_path)?;
+
+    println!("repo_updated {}", id);
     Ok(())
 }
 
@@ -566,10 +581,11 @@ fn mode_to_str(mode: CapsuleMode) -> &'static str {
 
 fn usage() {
     eprintln!(
-        "nexumctl capsule create --db <path> --id <id> --name <name> --workspace <n> --mode <host_default|isolated_nix_shell>"
+        "nexumctl capsule create --db <path> --id <id> --name <name> --workspace <n> --mode <host_default|isolated_nix_shell> [--repo-path <path>]"
     );
     eprintln!("nexumctl capsule list --db <path>");
     eprintln!("nexumctl capsule rename --db <path> --id <id> --name <name>");
+    eprintln!("nexumctl capsule set-repo --db <path> --id <id> --repo-path <path>");
     eprintln!(
         "nexumctl capsule set-state --db <path> --id <id> --state <creating|ready|restoring|degraded|archived>"
     );
