@@ -337,3 +337,16 @@ Rationale:
 
 Consequences:
 - CLI surface expands with supervisor health endpoint and per-capsule last-event metadata contract.
+
+## ADR-IMPL-027
+Context:
+- Unified supervisor status improved visibility, but operators still needed a quick reduced set of actionable capsules for incident response.
+
+Decision:
+- Add `nexumctl supervisor blockers` command with explicit degraded/critical-threshold rules.
+
+Rationale:
+- Provides an immediate triage list for intervention workflows without manual filtering of full status payload.
+
+Consequences:
+- CLI supervisor surface now includes blocker-specific endpoint and stable reason taxonomy.

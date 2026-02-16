@@ -258,3 +258,13 @@
 
 ## New Test Coverage (Milestone 26)
 - Supervisor CLI e2e validating aggregated capsule health + event health report contract.
+
+## Additional Work (Milestone 27)
+- Added `nexumctl supervisor blockers` command for focused triage output.
+- Blocker report includes capsules matching either:
+  - degraded lifecycle state
+  - critical-event threshold breach
+- Output now carries deterministic blocker reasons (`state_degraded`, `critical_events_threshold`).
+
+## New Test Coverage (Milestone 27)
+- Supervisor CLI e2e validating blocker selection and reason tags for degraded/critical capsules.

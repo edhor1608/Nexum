@@ -68,6 +68,14 @@ struct SupervisorStatusReport {
     capsules: Vec<SupervisorCapsuleStatus>,
 }
 
+#[derive(Debug, Serialize)]
+struct SupervisorBlocker {
+    capsule_id: String,
+    state: String,
+    critical_events: u32,
+    reasons: Vec<String>,
+}
+
 fn supervisor_command(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     if args.is_empty() {
         usage();
@@ -76,6 +84,7 @@ fn supervisor_command(args: &[String]) -> Result<(), Box<dyn std::error::Error>>
 
     match args[0].as_str() {
         "status" => supervisor_status(&args[1..]),
+        "blockers" => supervisor_blockers(&args[1..]),
         _ => {
             usage();
             std::process::exit(2);
@@ -138,6 +147,44 @@ fn supervisor_status(args: &[String]) -> Result<(), Box<dyn std::error::Error>> 
     };
 
     println!("{}", serde_json::to_string(&report)?);
+    Ok(())
+}
+
+fn supervisor_blockers(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let capsule_db = PathBuf::from(required_arg(args, "--capsule-db")?);
+    let events_db = PathBuf::from(required_arg(args, "--events-db")?);
+    let critical_threshold = optional_arg(args, "--critical-threshold")
+        .map(|value| value.parse::<u32>())
+        .transpose()?
+        .unwrap_or(1);
+
+    let store = CapsuleStore::open(&capsule_db)?;
+    let events = EventStore::open(&events_db)?;
+    let listed = store.list()?;
+
+    let mut blockers = Vec::new();
+    for capsule in listed {
+        let critical_events = events.count_for_capsule_level(&capsule.capsule_id, "critical")?;
+        let mut reasons = Vec::new();
+        if capsule.state == CapsuleState::Degraded {
+            reasons.push("state_degraded".to_string());
+        }
+        if critical_events >= critical_threshold {
+            reasons.push("critical_events_threshold".to_string());
+        }
+        if reasons.is_empty() {
+            continue;
+        }
+
+        blockers.push(SupervisorBlocker {
+            capsule_id: capsule.capsule_id,
+            state: state_to_str(capsule.state).to_string(),
+            critical_events,
+            reasons,
+        });
+    }
+
+    println!("{}", serde_json::to_string(&blockers)?);
     Ok(())
 }
 
@@ -900,6 +947,9 @@ fn usage() {
     );
     eprintln!(
         "nexumctl supervisor status --capsule-db <path> --events-db <path> --flags-file <path>"
+    );
+    eprintln!(
+        "nexumctl supervisor blockers --capsule-db <path> --events-db <path> [--critical-threshold <u32>]"
     );
     eprintln!("nexumctl tls ensure --dir <path> --domain <domain> [--validity-days <days>]");
     eprintln!("nexumctl tls rotate --dir <path> --domain <domain> --threshold-days <days>");
