@@ -285,3 +285,16 @@
 
 ## New Test Coverage (Milestone 29)
 - Snapshot tests for supervisor status/blockers output contracts.
+
+## Additional Work (Milestone 30)
+- Added `nexumctl capsule export --format yaml` command to expose store-backed capsule YAML contract through CLI.
+
+## New Test Coverage (Milestone 30)
+- Capsule lifecycle CLI e2e validating YAML export includes expected capsule metadata fields.
+
+## Additional Work (Milestone 31)
+- Added `nexumctl cutover rollback` command to explicitly disable capability flags.
+- Rollback output now returns machine-readable confirmation payload (`capability`, `flag`, `rolled_back`).
+
+## New Test Coverage (Milestone 31)
+- Cutover CLI e2e validating rollback disables only the targeted capability flag.

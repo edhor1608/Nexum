@@ -197,6 +197,7 @@ fn capsule_command(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     match args[0].as_str() {
         "create" => capsule_create(&args[1..]),
         "list" => capsule_list(&args[1..]),
+        "export" => capsule_export(&args[1..]),
         "rename" => capsule_rename(&args[1..]),
         "set-repo" => capsule_set_repo(&args[1..]),
         "set-state" => capsule_set_state(&args[1..]),
@@ -250,6 +251,20 @@ fn capsule_list(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
 
     println!("{}", serde_json::to_string(&payload)?);
     Ok(())
+}
+
+fn capsule_export(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let db = required_arg(args, "--db")?;
+    let format = required_arg(args, "--format")?;
+    let store = CapsuleStore::open(&PathBuf::from(db))?;
+
+    match format.as_str() {
+        "yaml" => {
+            println!("{}", store.export_yaml()?);
+            Ok(())
+        }
+        _ => Err(format!("unsupported export format: {format}").into()),
+    }
 }
 
 fn capsule_rename(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
@@ -601,6 +616,7 @@ fn cutover_command(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
         "apply" => cutover_apply(&args[1..]),
         "apply-from-events" => cutover_apply_from_events(&args[1..]),
         "apply-from-summary" => cutover_apply_from_summary(&args[1..]),
+        "rollback" => cutover_rollback(&args[1..]),
         _ => {
             usage();
             std::process::exit(2);
@@ -693,6 +709,38 @@ fn cutover_apply_from_summary(args: &[String]) -> Result<(), Box<dyn std::error:
     flags.save(&file)?;
 
     println!("{}", serde_json::to_string(&decision)?);
+    Ok(())
+}
+
+fn cutover_rollback(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let file = PathBuf::from(required_arg(args, "--file")?);
+    let capability_input = required_arg(args, "--capability")?;
+    let capability =
+        parse_capability(&capability_input).ok_or_else(|| "invalid capability".to_string())?;
+
+    let mut flags = CutoverFlags::load_or_default(&file)?;
+    let (flag, name) = match capability {
+        nexum::cutover::Capability::Routing => {
+            (FlagName::RoutingControlPlane, "routing_control_plane")
+        }
+        nexum::cutover::Capability::Restore => {
+            (FlagName::RestoreControlPlane, "restore_control_plane")
+        }
+        nexum::cutover::Capability::Attention => {
+            (FlagName::AttentionControlPlane, "attention_control_plane")
+        }
+    };
+    flags.set(flag, false);
+    flags.save(&file)?;
+
+    println!(
+        "{}",
+        serde_json::to_string(&serde_json::json!({
+            "capability": capability_input,
+            "flag": name,
+            "rolled_back": true,
+        }))?
+    );
     Ok(())
 }
 
@@ -947,6 +995,7 @@ fn usage() {
         "nexumctl capsule create --db <path> --id <id> --name <name> --workspace <n> --mode <host_default|isolated_nix_shell> [--repo-path <path>]"
     );
     eprintln!("nexumctl capsule list --db <path>");
+    eprintln!("nexumctl capsule export --db <path> --format <yaml>");
     eprintln!("nexumctl capsule rename --db <path> --id <id> --name <name>");
     eprintln!("nexumctl capsule set-repo --db <path> --id <id> --repo-path <path>");
     eprintln!(
@@ -993,6 +1042,7 @@ fn usage() {
     eprintln!(
         "nexumctl cutover apply-from-summary --file <path> --capability <routing|restore|attention> --parity-score <f64> --min-parity-score <f64> --events-db <path> --max-critical-events <u32> --shadow-mode <true|false>"
     );
+    eprintln!("nexumctl cutover rollback --file <path> --capability <routing|restore|attention>");
     eprintln!(
         "nexumctl run restore --capsule-id <id> --name <name> --workspace <n> --signal <needs_decision|critical_failure|passive_completion> --terminal <cmd> --editor <path> --browser <url> --upstream <host:port> [--routing-socket <path>] [--identity-collision true|false] [--high-risk-secret true|false] [--force-isolated true|false] [--capsule-db <path>] --tls-dir <path> --events-db <path>"
     );
