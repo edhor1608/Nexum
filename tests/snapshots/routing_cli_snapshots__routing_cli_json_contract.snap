@@ -1,0 +1,9 @@
+---
+source: tests/routing_cli_snapshots.rs
+assertion_line: 10
+expression: json
+---
+{
+  "kind": "registered",
+  "domain": "alpha.nexum.local"
+}

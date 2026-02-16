@@ -95,3 +95,12 @@
 - Restore runner integration test for script output + event persistence.
 - Restore runner snapshot contract.
 - Restore runner CLI e2e flow.
+
+## Additional Work (Milestone 10)
+- Extended `nexumctl` with daemon-backed routing commands: `health`, `register`, `resolve`, `remove`, and `list`.
+- Added CLI runtime bridge that executes async routing socket calls from synchronous command handlers.
+- Added routing usage/help entries to keep operator surface explicit.
+
+## New Test Coverage (Milestone 10)
+- Routing CLI e2e test validating daemon interaction across health/register/resolve/remove lifecycle.
+- Routing CLI snapshot contract for JSON outcome schema (`RouteOutcome::Registered`).
