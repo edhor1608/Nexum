@@ -194,3 +194,16 @@ Rationale:
 
 Consequences:
 - Shell script output contract changed and is now guarded by snapshot/e2e tests.
+
+## ADR-IMPL-016
+Context:
+- Capsule specification required explicit lifecycle state transitions and metadata update operations, but implementation only supported create/list.
+
+Decision:
+- Add `CapsuleState` to core model, persist it in SQLite with migration-safe schema extension, and expose lifecycle mutations via CLI (`capsule rename`, `capsule set-state`).
+
+Rationale:
+- Makes lifecycle management enforceable through tested command paths rather than ad-hoc direct DB edits.
+
+Consequences:
+- Capsule serialization and YAML export contracts changed to include `state`.

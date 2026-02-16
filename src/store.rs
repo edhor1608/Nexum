@@ -3,7 +3,7 @@ use std::path::Path;
 use rusqlite::{Connection, OptionalExtension, params};
 use thiserror::Error;
 
-use crate::capsule::{Capsule, CapsuleMode};
+use crate::capsule::{Capsule, CapsuleMode, CapsuleState, parse_state, state_to_str};
 
 #[derive(Debug)]
 pub struct CapsuleStore {
@@ -34,10 +34,12 @@ impl CapsuleStore {
                 slug TEXT NOT NULL,
                 display_name TEXT NOT NULL,
                 mode TEXT NOT NULL,
+                state TEXT NOT NULL DEFAULT 'ready',
                 workspace INTEGER NOT NULL
             );
             ",
         )?;
+        add_state_column_if_missing(&conn)?;
 
         Ok(Self { conn })
     }
@@ -45,12 +47,13 @@ impl CapsuleStore {
     pub fn upsert(&mut self, capsule: Capsule) -> Result<(), StoreError> {
         self.conn.execute(
             "
-            INSERT INTO capsules (capsule_id, slug, display_name, mode, workspace)
-            VALUES (?1, ?2, ?3, ?4, ?5)
+            INSERT INTO capsules (capsule_id, slug, display_name, mode, state, workspace)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6)
             ON CONFLICT(capsule_id) DO UPDATE SET
                 slug = excluded.slug,
                 display_name = excluded.display_name,
                 mode = excluded.mode,
+                state = excluded.state,
                 workspace = excluded.workspace
             ",
             params![
@@ -58,6 +61,7 @@ impl CapsuleStore {
                 capsule.slug,
                 capsule.display_name,
                 mode_to_str(capsule.mode),
+                state_to_str(capsule.state),
                 capsule.workspace
             ],
         )?;
@@ -67,7 +71,7 @@ impl CapsuleStore {
     pub fn get(&self, capsule_id: &str) -> Result<Option<Capsule>, StoreError> {
         self.conn
             .query_row(
-                "SELECT capsule_id, slug, display_name, mode, workspace FROM capsules WHERE capsule_id = ?1",
+                "SELECT capsule_id, slug, display_name, mode, state, workspace FROM capsules WHERE capsule_id = ?1",
                 params![capsule_id],
                 row_to_capsule,
             )
@@ -77,7 +81,7 @@ impl CapsuleStore {
 
     pub fn list(&self) -> Result<Vec<Capsule>, StoreError> {
         let mut stmt = self.conn.prepare(
-            "SELECT capsule_id, slug, display_name, mode, workspace FROM capsules ORDER BY capsule_id ASC",
+            "SELECT capsule_id, slug, display_name, mode, state, workspace FROM capsules ORDER BY capsule_id ASC",
         )?;
 
         let rows = stmt
@@ -91,16 +95,42 @@ impl CapsuleStore {
         let capsules = self.list()?;
         Ok(serde_yaml::to_string(&capsules)?)
     }
+
+    pub fn transition_state(
+        &mut self,
+        capsule_id: &str,
+        state: CapsuleState,
+    ) -> Result<(), StoreError> {
+        self.conn.execute(
+            "UPDATE capsules SET state = ?1 WHERE capsule_id = ?2",
+            params![state_to_str(state), capsule_id],
+        )?;
+        Ok(())
+    }
+
+    pub fn rename_display_name(
+        &mut self,
+        capsule_id: &str,
+        display_name: &str,
+    ) -> Result<(), StoreError> {
+        self.conn.execute(
+            "UPDATE capsules SET display_name = ?1 WHERE capsule_id = ?2",
+            params![display_name, capsule_id],
+        )?;
+        Ok(())
+    }
 }
 
 fn row_to_capsule(row: &rusqlite::Row<'_>) -> rusqlite::Result<Capsule> {
     let mode: String = row.get(3)?;
+    let state: String = row.get(4)?;
     Ok(Capsule {
         capsule_id: row.get(0)?,
         slug: row.get(1)?,
         display_name: row.get(2)?,
         mode: parse_mode(&mode),
-        workspace: row.get(4)?,
+        state: parse_state(&state).unwrap_or(CapsuleState::Ready),
+        workspace: row.get(5)?,
     })
 }
 
@@ -115,5 +145,20 @@ fn mode_to_str(mode: CapsuleMode) -> &'static str {
     match mode {
         CapsuleMode::HostDefault => "host_default",
         CapsuleMode::IsolatedNixShell => "isolated_nix_shell",
+    }
+}
+
+fn add_state_column_if_missing(conn: &Connection) -> Result<(), StoreError> {
+    match conn.execute(
+        "ALTER TABLE capsules ADD COLUMN state TEXT NOT NULL DEFAULT 'ready'",
+        [],
+    ) {
+        Ok(_) => Ok(()),
+        Err(rusqlite::Error::SqliteFailure(_, Some(message)))
+            if message.contains("duplicate column name") =>
+        {
+            Ok(())
+        }
+        Err(error) => Err(StoreError::Db(error)),
     }
 }

@@ -7,9 +7,11 @@ expression: exported
   slug: planner-service
   display_name: Planner Service
   mode: host_default
+  state: ready
   workspace: 8
 - capsule_id: cap-yaml-2
   slug: agent-gateway
   display_name: Agent Gateway
   mode: isolated_nix_shell
+  state: ready
   workspace: 9

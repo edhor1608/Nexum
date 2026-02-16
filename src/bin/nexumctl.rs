@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use nexum::{
-    capsule::{Capsule, CapsuleMode},
+    capsule::{Capsule, CapsuleMode, parse_state, state_to_str},
     cutover::{CutoverInput, apply_cutover, evaluate_cutover, parse_capability},
     flags::{CutoverFlags, FlagName},
     restore::SignalType,
@@ -47,6 +47,8 @@ fn capsule_command(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     match args[0].as_str() {
         "create" => capsule_create(&args[1..]),
         "list" => capsule_list(&args[1..]),
+        "rename" => capsule_rename(&args[1..]),
+        "set-state" => capsule_set_state(&args[1..]),
         _ => {
             usage();
             std::process::exit(2);
@@ -85,12 +87,38 @@ fn capsule_list(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
                 "domain": capsule.domain(),
                 "display_name": capsule.display_name,
                 "mode": mode_to_str(capsule.mode),
+                "state": state_to_str(capsule.state),
                 "workspace": capsule.workspace,
             })
         })
         .collect::<Vec<_>>();
 
     println!("{}", serde_json::to_string(&payload)?);
+    Ok(())
+}
+
+fn capsule_rename(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let db = required_arg(args, "--db")?;
+    let id = required_arg(args, "--id")?;
+    let name = required_arg(args, "--name")?;
+
+    let mut store = CapsuleStore::open(&PathBuf::from(db))?;
+    store.rename_display_name(&id, &name)?;
+
+    println!("renamed {}", id);
+    Ok(())
+}
+
+fn capsule_set_state(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let db = required_arg(args, "--db")?;
+    let id = required_arg(args, "--id")?;
+    let state = parse_state(&required_arg(args, "--state")?)
+        .ok_or_else(|| "invalid state".to_string())?;
+
+    let mut store = CapsuleStore::open(&PathBuf::from(db))?;
+    store.transition_state(&id, state)?;
+
+    println!("state_updated {}", id);
     Ok(())
 }
 
@@ -472,6 +500,10 @@ fn usage() {
         "nexumctl capsule create --db <path> --id <id> --name <name> --workspace <n> --mode <host_default|isolated_nix_shell>"
     );
     eprintln!("nexumctl capsule list --db <path>");
+    eprintln!("nexumctl capsule rename --db <path> --id <id> --name <name>");
+    eprintln!(
+        "nexumctl capsule set-state --db <path> --id <id> --state <creating|ready|restoring|degraded|archived>"
+    );
     eprintln!(
         "nexumctl flags set --file <path> [--shadow true|false] [--routing true|false] [--restore true|false] [--attention true|false]"
     );

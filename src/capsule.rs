@@ -7,12 +7,23 @@ pub enum CapsuleMode {
     IsolatedNixShell,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CapsuleState {
+    Creating,
+    Ready,
+    Restoring,
+    Degraded,
+    Archived,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Capsule {
     pub capsule_id: String,
     pub slug: String,
     pub display_name: String,
     pub mode: CapsuleMode,
+    pub state: CapsuleState,
     pub workspace: u16,
 }
 
@@ -23,6 +34,7 @@ impl Capsule {
             slug: normalize_slug(display_name),
             display_name: display_name.to_string(),
             mode,
+            state: CapsuleState::Ready,
             workspace,
         }
     }
@@ -33,6 +45,10 @@ impl Capsule {
 
     pub fn domain(&self) -> String {
         format!("{}.nexum.local", self.slug)
+    }
+
+    pub fn transition_state(&mut self, state: CapsuleState) {
+        self.state = state;
     }
 }
 
@@ -63,4 +79,25 @@ pub fn normalize_slug(input: &str) -> String {
     }
 
     slug
+}
+
+pub fn parse_state(input: &str) -> Option<CapsuleState> {
+    match input {
+        "creating" => Some(CapsuleState::Creating),
+        "ready" => Some(CapsuleState::Ready),
+        "restoring" => Some(CapsuleState::Restoring),
+        "degraded" => Some(CapsuleState::Degraded),
+        "archived" => Some(CapsuleState::Archived),
+        _ => None,
+    }
+}
+
+pub fn state_to_str(state: CapsuleState) -> &'static str {
+    match state {
+        CapsuleState::Creating => "creating",
+        CapsuleState::Ready => "ready",
+        CapsuleState::Restoring => "restoring",
+        CapsuleState::Degraded => "degraded",
+        CapsuleState::Archived => "archived",
+    }
 }

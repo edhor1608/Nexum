@@ -150,3 +150,13 @@
 - Runtime metadata unit tests for env contract and process label format.
 - Restore CLI e2e validates shell script includes `NEXUM_*` exports and process label.
 - Restore runner snapshot contract updated with metadata export prelude.
+
+## Additional Work (Milestone 16)
+- Added capsule lifecycle state model (`creating`, `ready`, `restoring`, `degraded`, `archived`) to core capsule contract.
+- Extended capsule persistence with state column (including migration path for existing DBs).
+- Added capsule lifecycle CLI operations: `capsule rename` and `capsule set-state`.
+
+## New Test Coverage (Milestone 16)
+- Store integration test for explicit lifecycle state transition persistence.
+- Capsule lifecycle CLI e2e for rename + state transition flow.
+- Capsule/store snapshots updated to lock state field in contract exports.

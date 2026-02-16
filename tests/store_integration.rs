@@ -53,3 +53,26 @@ fn renaming_display_name_keeps_slug_stable_in_store() {
     assert_eq!(loaded.slug, "billing-api");
     assert_eq!(loaded.display_name, "Billing API V2");
 }
+
+#[test]
+fn store_supports_lifecycle_state_transition() {
+    let dir = tempdir().unwrap();
+    let db = dir.path().join("capsules.sqlite3");
+
+    let mut store = CapsuleStore::open(&db).unwrap();
+    store
+        .upsert(Capsule::new(
+            "cap-store-4",
+            "Stateful Capsule",
+            CapsuleMode::HostDefault,
+            3,
+        ))
+        .unwrap();
+
+    store
+        .transition_state("cap-store-4", nexum::capsule::CapsuleState::Degraded)
+        .unwrap();
+
+    let loaded = store.get("cap-store-4").unwrap().unwrap();
+    assert_eq!(loaded.state, nexum::capsule::CapsuleState::Degraded);
+}
