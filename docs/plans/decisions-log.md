@@ -64,3 +64,16 @@ Rationale:
 
 Consequences:
 - Requires operational policy thresholds for parity acceptance in later rollout phases.
+
+## ADR-IMPL-006
+Context:
+- Control-plane plans needed an explicit execution boundary to avoid coupling directly to process spawning and to prepare for real niri integration.
+
+Decision:
+- Introduce `NiriAdapter` trait with deterministic `execute_shell_plan` and script rendering surface.
+
+Rationale:
+- Enables testing of shell execution semantics independent of runtime adapter choice.
+
+Consequences:
+- Future niri runtime adapter can be added without changing restore/control-plane planning contracts.

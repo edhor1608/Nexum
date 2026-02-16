@@ -4,6 +4,7 @@ use nexum::{
     capsule::{Capsule, CapsuleMode},
     flags::{CutoverFlags, FlagName},
     shadow::{ExecutionResult, compare_execution},
+    shell::{NiriShellCommand, NiriShellPlan, render_shell_script},
     store::CapsuleStore,
 };
 
@@ -18,6 +19,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "capsule" => capsule_command(&args[1..])?,
         "flags" => flags_command(&args[1..])?,
         "parity" => parity_command(&args[1..])?,
+        "shell" => shell_command(&args[1..])?,
         _ => {
             usage();
             std::process::exit(2);
@@ -156,6 +158,43 @@ fn parity_compare(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+fn shell_command(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    if args.is_empty() {
+        usage();
+        std::process::exit(2);
+    }
+
+    match args[0].as_str() {
+        "render" => shell_render(&args[1..]),
+        _ => {
+            usage();
+            std::process::exit(2);
+        }
+    }
+}
+
+fn shell_render(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let workspace = required_arg(args, "--workspace")?.parse::<u16>()?;
+    let terminal = required_arg(args, "--terminal")?;
+    let editor = required_arg(args, "--editor")?;
+    let browser = required_arg(args, "--browser")?;
+    let attention = required_arg(args, "--attention")?;
+
+    let plan = NiriShellPlan {
+        workspace,
+        commands: vec![
+            NiriShellCommand::FocusWorkspace(workspace),
+            NiriShellCommand::SpawnTerminal(terminal),
+            NiriShellCommand::SpawnEditor(editor),
+            NiriShellCommand::SpawnBrowser(browser),
+            NiriShellCommand::RaiseAttention(attention),
+        ],
+    };
+
+    println!("{}", render_shell_script(&plan));
+    Ok(())
+}
+
 fn required_arg(args: &[String], key: &str) -> Result<String, Box<dyn std::error::Error>> {
     let pos = args
         .iter()
@@ -207,4 +246,7 @@ fn usage() {
     );
     eprintln!("nexumctl flags show --file <path>");
     eprintln!("nexumctl parity compare --primary-json <json> --candidate-json <json>");
+    eprintln!(
+        "nexumctl shell render --workspace <n> --terminal <cmd> --editor <path> --browser <url> --attention <level>"
+    );
 }

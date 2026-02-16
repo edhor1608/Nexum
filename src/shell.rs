@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 use crate::restore::{RestorePlan, RestoreStep};
 
@@ -16,6 +17,26 @@ pub enum NiriShellCommand {
 pub struct NiriShellPlan {
     pub workspace: u16,
     pub commands: Vec<NiriShellCommand>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ShellExecutionReport {
+    pub workspace: u16,
+    pub executed: Vec<NiriShellCommand>,
+}
+
+#[derive(Debug, Error, Clone, PartialEq, Eq)]
+pub enum ShellAdapterError {
+    #[error("command failed: {0}")]
+    CommandFailed(String),
+}
+
+pub trait NiriAdapter {
+    fn focus_workspace(&mut self, workspace: u16) -> Result<(), ShellAdapterError>;
+    fn spawn_terminal(&mut self, command: &str) -> Result<(), ShellAdapterError>;
+    fn spawn_editor(&mut self, target: &str) -> Result<(), ShellAdapterError>;
+    fn spawn_browser(&mut self, url: &str) -> Result<(), ShellAdapterError>;
+    fn raise_attention(&mut self, level: &str) -> Result<(), ShellAdapterError>;
 }
 
 pub fn build_niri_shell_plan(restore: &RestorePlan) -> NiriShellPlan {
@@ -48,4 +69,52 @@ pub fn build_niri_shell_plan(restore: &RestorePlan) -> NiriShellPlan {
         workspace,
         commands,
     }
+}
+
+pub fn execute_shell_plan<A: NiriAdapter>(
+    plan: &NiriShellPlan,
+    adapter: &mut A,
+) -> Result<ShellExecutionReport, ShellAdapterError> {
+    let mut executed = Vec::new();
+
+    for command in &plan.commands {
+        match command {
+            NiriShellCommand::FocusWorkspace(id) => adapter.focus_workspace(*id)?,
+            NiriShellCommand::SpawnTerminal(cmd) => adapter.spawn_terminal(cmd)?,
+            NiriShellCommand::SpawnEditor(target) => adapter.spawn_editor(target)?,
+            NiriShellCommand::SpawnBrowser(url) => adapter.spawn_browser(url)?,
+            NiriShellCommand::RaiseAttention(level) => adapter.raise_attention(level)?,
+        }
+        executed.push(command.clone());
+    }
+
+    Ok(ShellExecutionReport {
+        workspace: plan.workspace,
+        executed,
+    })
+}
+
+pub fn render_shell_script(plan: &NiriShellPlan) -> String {
+    let mut lines = Vec::new();
+
+    for command in &plan.commands {
+        let line = match command {
+            NiriShellCommand::FocusWorkspace(id) => format!("niri msg action focus-workspace {id}"),
+            NiriShellCommand::SpawnTerminal(cmd) => {
+                format!("wezterm start -- bash -lc '{}'", escape_single_quotes(cmd))
+            }
+            NiriShellCommand::SpawnEditor(target) => format!("code {target}"),
+            NiriShellCommand::SpawnBrowser(url) => format!("xdg-open {url}"),
+            NiriShellCommand::RaiseAttention(level) => {
+                format!("notify-send 'Nexum Attention' '{level}'")
+            }
+        };
+        lines.push(line);
+    }
+
+    lines.join("\n")
+}
+
+fn escape_single_quotes(input: &str) -> String {
+    input.replace('\'', "'\"'\"'")
 }

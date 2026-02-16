@@ -53,3 +53,14 @@
 - Integration tests: control-plane execution composition and event persistence.
 - Snapshot tests: control-plane execution contract and parity report contract.
 - E2E tests: `nexumctl flags set/show` and `nexumctl parity compare` workflows.
+
+## Additional Work (Milestone 6)
+- Added explicit niri adapter boundary (`NiriAdapter`) to decouple plan generation from execution backend.
+- Added `execute_shell_plan` with fail-fast semantics.
+- Added `render_shell_script` for deterministic command rendering and review.
+- Extended `nexumctl` with `shell render` command for quick operator inspection.
+
+## New Test Coverage (Milestone 6)
+- Adapter unit tests for command ordering and failure stop behavior.
+- Snapshot contract for rendered niri shell script.
+- CLI e2e test for shell script rendering.
