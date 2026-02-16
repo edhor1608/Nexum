@@ -222,6 +222,69 @@ fn nexumctl_stead_dispatch_batch_writes_report_file() {
 }
 
 #[test]
+fn nexumctl_stead_dispatch_batch_dry_run_has_no_restore_side_effects() {
+    let dir = tempdir().unwrap();
+    let capsule_db = dir.path().join("capsules.sqlite3");
+    let tls_dir = dir.path().join("tls");
+    let events_db = dir.path().join("events.sqlite3");
+    let nexumctl = assert_cmd::cargo::cargo_bin!("nexumctl");
+
+    let create = Command::new(nexumctl)
+        .arg("capsule")
+        .arg("create")
+        .arg("--db")
+        .arg(&capsule_db)
+        .arg("--id")
+        .arg("cap-dry-run")
+        .arg("--name")
+        .arg("Dry Run Capsule")
+        .arg("--workspace")
+        .arg("25")
+        .arg("--mode")
+        .arg("host_default")
+        .arg("--repo-path")
+        .arg("/workspace/dry-run")
+        .output()
+        .unwrap();
+    assert!(create.status.success());
+
+    let events = r#"[{"capsule_id":"cap-dry-run","signal":"needs_decision","upstream":"127.0.0.1:4795"},{"capsule_id":"cap-dry-run-missing","signal":"critical_failure","upstream":"127.0.0.1:4796"}]"#;
+    let out = Command::new(nexumctl)
+        .arg("stead")
+        .arg("dispatch-batch")
+        .arg("--capsule-db")
+        .arg(&capsule_db)
+        .arg("--events-json")
+        .arg(events)
+        .arg("--tls-dir")
+        .arg(&tls_dir)
+        .arg("--events-db")
+        .arg(&events_db)
+        .arg("--dry-run")
+        .arg("true")
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+
+    let payload: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(payload["dry_run"], Value::Bool(true));
+    assert_eq!(payload["processed"], Value::Number(2u64.into()));
+    assert_eq!(payload["succeeded"], Value::Number(1u64.into()));
+    assert_eq!(payload["failed"], Value::Number(1u64.into()));
+
+    let summary = Command::new(nexumctl)
+        .arg("events")
+        .arg("summary")
+        .arg("--db")
+        .arg(&events_db)
+        .output()
+        .unwrap();
+    assert!(summary.status.success());
+    let summary_payload: Value = serde_json::from_slice(&summary.stdout).unwrap();
+    assert_eq!(summary_payload["total_events"], Value::Number(0u64.into()));
+}
+
+#[test]
 fn nexumctl_stead_dispatch_batch_fail_on_missing_capsules_aborts_without_side_effects() {
     let dir = tempdir().unwrap();
     let capsule_db = dir.path().join("capsules.sqlite3");
