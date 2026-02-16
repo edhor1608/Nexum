@@ -77,3 +77,16 @@ Rationale:
 
 Consequences:
 - Future niri runtime adapter can be added without changing restore/control-plane planning contracts.
+
+## ADR-IMPL-007
+Context:
+- Routing policy requires self-signed per-capsule TLS lifecycle that is local, deterministic, and testable.
+
+Decision:
+- Add `tls` module with on-disk cert/key material + metadata and threshold-based rotation API.
+
+Rationale:
+- Keeps TLS policy concrete while staying local-first and simple to operate.
+
+Consequences:
+- Metadata file integrity is now part of TLS operational correctness.
