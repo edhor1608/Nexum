@@ -28,25 +28,18 @@ Core loop:
 ## Architecture Baseline
 
 - **Base distro:** NixOS
-- **Window manager layer:** niri (WM) + separate Stead shell
+- **Window manager layer:** niri-centric shell with deep Stead integration
 - **Capsule isolation:** hybrid (host-default + isolated mode)
 - **Identity strategy:** hybrid (domain isolation + profile fallback)
-- **Stead integration:** staged (app-level first, control-plane second)
+- **Stead integration:** OS control-plane-first integration
 - **Isolated-mode backend:** native Nix shell (`nix develop`)
 - **Routing strategy:** custom routing daemon
 - **Migration strategy:** shadow mode + feature-flag cutovers
 
 ## Current Status
 
-Planning and specification phase.  
-Implementation starts after spec lock for:
-
-- `capsule_spec.md`
-- `restore_flow_spec.md`
-- `isolation_policy.md`
-- `routing_daemon_spec.md`
-- `migration_cutover_plan.md`
-- `test_strategy_v1.md`
+Active implementation with stacked milestone PRs and TDD-first contracts.
+Current work is focused on control-plane surfaces (capsule lifecycle, routing, restore orchestration, cutover gates, supervisor status, and Stead batch ingress).
 
 ## Design Principles
 
