@@ -347,3 +347,13 @@
 ## New Test Coverage (Milestone 36)
 - Stead CLI e2e validating priority counters, ack counts, and focus capsule selection behavior.
 - Snapshot contract test for attention-plan payload shape (`tests/snapshots/stead_snapshots__stead_attention_plan_contract.snap`).
+
+## Additional Work (Milestone 37)
+- Extended `stead dispatch-batch` response contract with embedded `attention_plan` summary.
+- Batch execution output now carries supervision-ready routing metadata alongside per-event execution results.
+- Reused shared Stead attention planning logic to keep routing semantics consistent between:
+  - `stead attention-plan`
+  - `stead dispatch-batch`
+
+## New Test Coverage (Milestone 37)
+- Stead CLI e2e now validates dispatch-batch attention summary counters and focus capsule selection in mixed-success batches.
