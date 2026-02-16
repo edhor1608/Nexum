@@ -41,6 +41,8 @@ pub struct RestoreRunSummary {
     pub capsule_id: String,
     pub domain: String,
     pub run_mode: String,
+    pub degraded: bool,
+    pub degraded_reason: Option<String>,
     pub target_budget_ms: u64,
     pub shell_script: String,
     pub tls_fingerprint_sha256: String,
@@ -85,7 +87,7 @@ pub fn run_restore_flow(input: RestoreRunInput) -> Result<RestoreRunSummary, Run
 
     let tls = ensure_self_signed_cert(&input.tls_dir, &capsule.domain(), 30)?;
 
-    ensure_route(&capsule, &input)?;
+    let route_status = ensure_route(&capsule, &input)?;
 
     let shell_script = apply_browser_launch_policy(
         render_shell_script(&build_niri_shell_plan(&restore)),
@@ -98,6 +100,21 @@ pub fn run_restore_flow(input: RestoreRunInput) -> Result<RestoreRunSummary, Run
     );
     let shell_script = apply_runtime_metadata(shell_script, &capsule);
 
+    let (degraded, degraded_reason, routing_level, routing_message) = match route_status {
+        RouteEnsureStatus::Ready => (
+            false,
+            None,
+            "info".to_string(),
+            format!("route ensured for {}", capsule.domain()),
+        ),
+        RouteEnsureStatus::Degraded(reason) => (
+            true,
+            Some(reason.clone()),
+            "warn".to_string(),
+            format!("degraded route for {}: {}", capsule.domain(), reason),
+        ),
+    };
+
     let mut events = EventStore::open(&input.events_db)?;
     events.append(RuntimeEvent {
         capsule_id: capsule.capsule_id.clone(),
@@ -109,8 +126,8 @@ pub fn run_restore_flow(input: RestoreRunInput) -> Result<RestoreRunSummary, Run
     events.append(RuntimeEvent {
         capsule_id: capsule.capsule_id.clone(),
         component: "routing".into(),
-        level: "info".into(),
-        message: format!("route ensured for {}", capsule.domain()),
+        level: routing_level,
+        message: routing_message,
         ts_unix_ms: now_unix_ms(),
     })?;
     events.append(RuntimeEvent {
@@ -125,6 +142,8 @@ pub fn run_restore_flow(input: RestoreRunInput) -> Result<RestoreRunSummary, Run
         capsule_id: capsule.capsule_id.clone(),
         domain: capsule.domain(),
         run_mode: mode_to_str(capsule.mode).to_string(),
+        degraded,
+        degraded_reason,
         target_budget_ms: restore.target_budget_ms,
         shell_script,
         tls_fingerprint_sha256: tls.fingerprint_sha256,
@@ -139,31 +158,51 @@ fn now_unix_ms() -> u64 {
         .as_millis() as u64
 }
 
-fn ensure_route(capsule: &Capsule, input: &RestoreRunInput) -> Result<(), RunFlowError> {
+#[derive(Debug, Clone)]
+enum RouteEnsureStatus {
+    Ready,
+    Degraded(String),
+}
+
+fn ensure_route(
+    capsule: &Capsule,
+    input: &RestoreRunInput,
+) -> Result<RouteEnsureStatus, RunFlowError> {
     if let Some(socket) = &input.routing_socket {
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_io()
             .build()
             .map_err(|error| RunFlowError::Routing(error.to_string()))?;
 
-        let outcome = runtime
-            .block_on(send_command(
-                socket,
-                RouteCommand::Register {
-                    capsule_id: capsule.capsule_id.clone(),
-                    domain: capsule.domain(),
-                    upstream: input.route_upstream.clone(),
-                },
-            ))
-            .map_err(|error| RunFlowError::Routing(error.to_string()))?;
+        let outcome = match runtime.block_on(send_command(
+            socket,
+            RouteCommand::Register {
+                capsule_id: capsule.capsule_id.clone(),
+                domain: capsule.domain(),
+                upstream: input.route_upstream.clone(),
+            },
+        )) {
+            Ok(outcome) => outcome,
+            Err(error) => {
+                return Ok(RouteEnsureStatus::Degraded(format!(
+                    "route_unavailable: {}",
+                    error
+                )));
+            }
+        };
 
         return match outcome {
-            RouteOutcome::Registered { .. } => Ok(()),
+            RouteOutcome::Registered { .. } => Ok(RouteEnsureStatus::Ready),
             RouteOutcome::Error { code, message } => {
-                Err(RunFlowError::Routing(format!("{code}: {message}")))
+                if code == "domain_conflict" {
+                    return Err(RunFlowError::Routing(format!("{code}: {message}")));
+                }
+                Ok(RouteEnsureStatus::Degraded(format!(
+                    "route_unavailable: {code}: {message}"
+                )))
             }
-            other => Err(RunFlowError::Routing(format!(
-                "unexpected daemon outcome: {:?}",
+            other => Ok(RouteEnsureStatus::Degraded(format!(
+                "route_unavailable: unexpected daemon outcome: {:?}",
                 other
             ))),
         };
@@ -179,7 +218,7 @@ fn ensure_route(capsule: &Capsule, input: &RestoreRunInput) -> Result<(), RunFlo
         return Err(RunFlowError::Routing(message));
     }
 
-    Ok(())
+    Ok(RouteEnsureStatus::Ready)
 }
 
 fn apply_browser_launch_policy(script: String, browser_url: &str, launch_cmd: &str) -> String {

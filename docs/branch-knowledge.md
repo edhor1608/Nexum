@@ -169,3 +169,13 @@
 ## New Test Coverage (Milestone 17)
 - Store integration test for stable allocation + reuse after release.
 - Capsule ports CLI e2e for allocate/list/release behavior.
+
+## Additional Work (Milestone 18)
+- Implemented degraded restore path when routing transport is unavailable (socket/connect/protocol issues).
+- Preserve hard failure for domain conflicts while allowing degraded continuation for transport-level route unavailability.
+- Extended restore summary contract with `degraded` and `degraded_reason`.
+
+## New Test Coverage (Milestone 18)
+- Restore runner degraded integration test for unavailable routing socket behavior.
+- Restore CLI e2e degraded-path test via missing routing socket.
+- Restore runner snapshot updated to lock degraded fields in summary contract.

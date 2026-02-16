@@ -60,6 +60,7 @@ fn nexumctl_run_restore_executes_end_to_end_plan() {
             .contains("export NEXUM_PROCESS_LABEL=nexum-terminal-cap-run-cli")
     );
     assert_eq!(value["run_mode"], Value::String("host_default".into()));
+    assert_eq!(value["degraded"], Value::Bool(false));
     assert_eq!(value["events_written"], Value::Number(3u64.into()));
 }
 
@@ -260,4 +261,51 @@ fn nexumctl_run_restore_escalates_to_isolated_mode_for_high_risk_secret_workflow
 
     daemon.kill().unwrap();
     let _ = daemon.wait();
+}
+
+#[test]
+fn nexumctl_run_restore_returns_degraded_summary_when_routing_socket_is_unavailable() {
+    let dir = tempdir().unwrap();
+    let missing_socket = dir.path().join("missing.sock");
+    let tls_dir = dir.path().join("tls");
+    let events_db = dir.path().join("events.sqlite3");
+
+    let nexumctl = assert_cmd::cargo::cargo_bin!("nexumctl");
+    let out = Command::new(nexumctl)
+        .arg("run")
+        .arg("restore")
+        .arg("--capsule-id")
+        .arg("cap-run-cli-degraded")
+        .arg("--name")
+        .arg("Runner Degraded")
+        .arg("--workspace")
+        .arg("12")
+        .arg("--signal")
+        .arg("needs_decision")
+        .arg("--terminal")
+        .arg("cd /workspace/degraded && nix develop")
+        .arg("--editor")
+        .arg("/workspace/degraded")
+        .arg("--browser")
+        .arg("https://runner-degraded.nexum.local")
+        .arg("--upstream")
+        .arg("127.0.0.1:4765")
+        .arg("--routing-socket")
+        .arg(&missing_socket)
+        .arg("--tls-dir")
+        .arg(&tls_dir)
+        .arg("--events-db")
+        .arg(&events_db)
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+
+    let value: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(value["degraded"], Value::Bool(true));
+    assert!(
+        value["degraded_reason"]
+            .as_str()
+            .unwrap()
+            .contains("route_unavailable")
+    );
 }

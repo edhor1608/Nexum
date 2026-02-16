@@ -220,3 +220,16 @@ Rationale:
 
 Consequences:
 - Capsule list output now includes `allocated_ports`, and CLI contract expands with port lifecycle commands.
+
+## ADR-IMPL-018
+Context:
+- Restore flow specification required degraded continuation when routing is unavailable, but implementation aborted restore on socket-level routing failures.
+
+Decision:
+- Treat routing transport failures as degraded restore outcomes (`degraded=true`) while keeping domain-conflict responses as hard failures.
+
+Rationale:
+- Preserves user recovery path under transient local routing issues while still preventing unsafe domain ownership conflicts.
+
+Consequences:
+- Restore summary contract expanded with degraded fields, and downstream consumers can differentiate soft-degraded vs hard-failed restore outcomes.
