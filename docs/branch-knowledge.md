@@ -85,3 +85,13 @@
 - Cutover integration test with parity + flags application.
 - Cutover decision snapshot contract.
 - Cutover CLI e2e flow validating flag file mutation.
+
+## Additional Work (Milestone 9)
+- Added restore-runner orchestration module (`runflow`) for an executable control-plane restore slice.
+- Flow now composes restore planning, route registration, TLS ensure, shell script rendering, and event persistence.
+- Extended `nexumctl` with `run restore` command.
+
+## New Test Coverage (Milestone 9)
+- Restore runner integration test for script output + event persistence.
+- Restore runner snapshot contract.
+- Restore runner CLI e2e flow.
