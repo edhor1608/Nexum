@@ -1,0 +1,32 @@
+---
+source: tests/stead_snapshots.rs
+expression: payload
+---
+attention_plan:
+  active: 1
+  blocking: 1
+  focus_capsule_id: missing-snap
+  passive: 0
+  requires_ack_count: 2
+  routes:
+    - capsule_id: cap-snap-batch
+      channel: banner
+      priority: active
+      requires_ack: true
+      summary: "needs_decision from 127.0.0.1:5300"
+    - capsule_id: missing-snap
+      channel: banner_and_sound
+      priority: blocking
+      requires_ack: true
+      summary: "critical_failure from 127.0.0.1:5301"
+dry_run: true
+failed: 1
+processed: 2
+results:
+  - capsule_id: cap-snap-batch
+    error: ~
+    ok: true
+  - capsule_id: missing-snap
+    error: "unknown capsule: missing-snap"
+    ok: false
+succeeded: 1
