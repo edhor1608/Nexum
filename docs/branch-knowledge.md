@@ -179,3 +179,11 @@
 - Restore runner degraded integration test for unavailable routing socket behavior.
 - Restore CLI e2e degraded-path test via missing routing socket.
 - Restore runner snapshot updated to lock degraded fields in summary contract.
+
+## Additional Work (Milestone 19)
+- Added event-level critical count query to event store.
+- Added `nexumctl cutover apply-from-events` to compute critical-event gate input directly from runtime events DB.
+- Wired event-driven cutover path into existing cutover evaluator and flag application flow.
+
+## New Test Coverage (Milestone 19)
+- Cutover CLI e2e tests for event-driven allow and deny cases based on critical event threshold.

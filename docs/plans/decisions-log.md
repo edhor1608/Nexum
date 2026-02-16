@@ -233,3 +233,16 @@ Rationale:
 
 Consequences:
 - Restore summary contract expanded with degraded fields, and downstream consumers can differentiate soft-degraded vs hard-failed restore outcomes.
+
+## ADR-IMPL-019
+Context:
+- Migration cutover gates required checking critical runtime regressions, but CLI cutover flow relied on manually supplied critical-event counts.
+
+Decision:
+- Add event-driven cutover command (`cutover apply-from-events`) that derives critical counts from runtime event storage per capsule.
+
+Rationale:
+- Reduces operator error and aligns cutover gating with observed runtime state.
+
+Consequences:
+- Cutover CLI surface now includes an event-store dependent path in addition to manual gate-input path.

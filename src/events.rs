@@ -91,4 +91,21 @@ impl EventStore {
 
         Ok(rows)
     }
+
+    pub fn count_for_capsule_level(
+        &self,
+        capsule_id: &str,
+        level: &str,
+    ) -> Result<u32, EventError> {
+        let count = self.conn.query_row(
+            "
+            SELECT COUNT(*)
+            FROM runtime_events
+            WHERE capsule_id = ?1 AND level = ?2
+            ",
+            params![capsule_id, level],
+            |row| row.get::<_, u32>(0),
+        )?;
+        Ok(count)
+    }
 }
