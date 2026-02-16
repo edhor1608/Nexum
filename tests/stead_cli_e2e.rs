@@ -166,4 +166,53 @@ fn nexumctl_stead_validate_events_reports_batch_shape() {
     assert_eq!(payload["event_count"], Value::Number(2u64.into()));
     assert_eq!(payload["capsule_ids"][0], Value::String("cap-a".into()));
     assert_eq!(payload["capsule_ids"][1], Value::String("cap-b".into()));
+    assert_eq!(payload["missing_capsule_ids"], Value::Array(vec![]));
+}
+
+#[test]
+fn nexumctl_stead_validate_events_reports_missing_capsules_when_db_is_provided() {
+    let dir = tempdir().unwrap();
+    let capsule_db = dir.path().join("capsules.sqlite3");
+    let nexumctl = assert_cmd::cargo::cargo_bin!("nexumctl");
+
+    let create = Command::new(nexumctl)
+        .arg("capsule")
+        .arg("create")
+        .arg("--db")
+        .arg(&capsule_db)
+        .arg("--id")
+        .arg("cap-known")
+        .arg("--name")
+        .arg("Known Capsule")
+        .arg("--workspace")
+        .arg("24")
+        .arg("--mode")
+        .arg("host_default")
+        .arg("--repo-path")
+        .arg("/workspace/known")
+        .output()
+        .unwrap();
+    assert!(create.status.success());
+
+    let events = r#"[{"capsule_id":"cap-known","signal":"needs_decision","upstream":"127.0.0.1:4900"},{"capsule_id":"cap-missing","signal":"critical_failure","upstream":"127.0.0.1:4901"},{"capsule_id":"cap-missing","signal":"passive_completion","upstream":"127.0.0.1:4902"}]"#;
+    let out = Command::new(nexumctl)
+        .arg("stead")
+        .arg("validate-events")
+        .arg("--events-json")
+        .arg(events)
+        .arg("--capsule-db")
+        .arg(&capsule_db)
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+
+    let payload: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(payload["valid"], Value::Bool(false));
+    assert_eq!(payload["event_count"], Value::Number(3u64.into()));
+    assert_eq!(payload["capsule_ids"][0], Value::String("cap-known".into()));
+    assert_eq!(payload["capsule_ids"][1], Value::String("cap-missing".into()));
+    assert_eq!(
+        payload["missing_capsule_ids"],
+        Value::Array(vec![Value::String("cap-missing".into())])
+    );
 }

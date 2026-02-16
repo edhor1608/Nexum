@@ -428,3 +428,16 @@ Rationale:
 
 Consequences:
 - Stead CLI now includes a validation endpoint with stable machine-readable fields (`valid`, `event_count`, `capsule_ids`) for gating automation.
+
+## ADR-IMPL-034
+Context:
+- `stead validate-events` verified JSON shape but could not confirm whether referenced capsules existed in persisted control-plane state.
+
+Decision:
+- Extend `stead validate-events` with optional `--capsule-db` lookup and emit `missing_capsule_ids` plus adjusted `valid` status.
+
+Rationale:
+- Enables pre-dispatch safety checks in control-plane-first Stead flows (D-005 Option B) without executing restore side effects.
+
+Consequences:
+- Validation payload contract now includes store-aware capsule existence diagnostics and snapshot-locked schema coverage.

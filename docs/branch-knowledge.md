@@ -315,3 +315,14 @@
 
 ## New Test Coverage (Milestone 33)
 - Stead CLI e2e validating validation payload shape and expected capsule/event counts for a valid batch envelope.
+
+## Additional Work (Milestone 34)
+- Extended `nexumctl stead validate-events` with optional `--capsule-db` preflight checks.
+- Validation now reports capsule membership health against store state using:
+  - `valid` (false when unknown capsule ids are present)
+  - `missing_capsule_ids` (sorted unique list)
+- Kept output deterministic for automation gating and supervisor ingestion paths.
+
+## New Test Coverage (Milestone 34)
+- Stead CLI e2e validating unknown capsule detection and deduplicated missing-id reporting when `--capsule-db` is provided.
+- Snapshot contract test for `stead validate-events` payload shape (`tests/snapshots/stead_snapshots__stead_validate_events_contract.snap`).

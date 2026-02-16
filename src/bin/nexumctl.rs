@@ -929,21 +929,34 @@ fn dispatch_stead_event(
 fn stead_validate_events(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let events = parse_dispatch_events(&required_arg(args, "--events-json")?)
         .map_err(|error| error.to_string())?;
+    let capsule_db = optional_arg(args, "--capsule-db").map(PathBuf::from);
     let event_count = events.len();
 
     let mut capsule_ids = events
-        .into_iter()
-        .map(|event| event.capsule_id)
+        .iter()
+        .map(|event| event.capsule_id.clone())
         .collect::<Vec<_>>();
     capsule_ids.sort();
     capsule_ids.dedup();
 
+    let mut missing_capsule_ids = Vec::new();
+    if let Some(capsule_db) = capsule_db {
+        let store = CapsuleStore::open(&capsule_db)?;
+        for capsule_id in &capsule_ids {
+            if store.get(capsule_id)?.is_none() {
+                missing_capsule_ids.push(capsule_id.clone());
+            }
+        }
+    }
+    let valid = missing_capsule_ids.is_empty();
+
     println!(
         "{}",
         serde_json::to_string(&serde_json::json!({
-            "valid": true,
+            "valid": valid,
             "event_count": event_count,
             "capsule_ids": capsule_ids,
+            "missing_capsule_ids": missing_capsule_ids,
         }))?
     );
     Ok(())
@@ -1145,7 +1158,7 @@ fn usage() {
     eprintln!(
         "nexumctl stead dispatch-batch --capsule-db <path> --events-json <json-array> [--terminal <cmd>] [--editor <path>] [--browser <url>] [--routing-socket <path>] --tls-dir <path> --events-db <path>"
     );
-    eprintln!("nexumctl stead validate-events --events-json <json-array>");
+    eprintln!("nexumctl stead validate-events --events-json <json-array> [--capsule-db <path>]");
     eprintln!(
         "nexumctl supervisor status --capsule-db <path> --events-db <path> --flags-file <path>"
     );
