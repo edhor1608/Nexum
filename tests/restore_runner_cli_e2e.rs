@@ -465,3 +465,103 @@ fn nexumctl_run_restore_marks_capsule_degraded_in_store_on_route_unavailable() {
     );
     assert_eq!(payload[0]["state"], Value::String("degraded".into()));
 }
+
+#[test]
+fn nexumctl_run_restore_capsule_uses_capsule_metadata_defaults() {
+    let dir = tempdir().unwrap();
+    let capsule_db = dir.path().join("capsules.sqlite3");
+    let tls_dir = dir.path().join("tls");
+    let events_db = dir.path().join("events.sqlite3");
+    let nexumctl = assert_cmd::cargo::cargo_bin!("nexumctl");
+
+    let create = Command::new(nexumctl)
+        .arg("capsule")
+        .arg("create")
+        .arg("--db")
+        .arg(&capsule_db)
+        .arg("--id")
+        .arg("cap-restore-defaults")
+        .arg("--name")
+        .arg("Restore Defaults")
+        .arg("--workspace")
+        .arg("16")
+        .arg("--mode")
+        .arg("host_default")
+        .arg("--repo-path")
+        .arg("/workspace/defaults")
+        .output()
+        .unwrap();
+    assert!(create.status.success());
+
+    let out = Command::new(nexumctl)
+        .arg("run")
+        .arg("restore-capsule")
+        .arg("--capsule-db")
+        .arg(&capsule_db)
+        .arg("--capsule-id")
+        .arg("cap-restore-defaults")
+        .arg("--signal")
+        .arg("needs_decision")
+        .arg("--upstream")
+        .arg("127.0.0.1:4772")
+        .arg("--tls-dir")
+        .arg(&tls_dir)
+        .arg("--events-db")
+        .arg(&events_db)
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let value: Value = serde_json::from_slice(&out.stdout).unwrap();
+    let script = value["shell_script"].as_str().unwrap();
+    assert!(script.contains("cd /workspace/defaults && nix develop"));
+    assert!(script.contains("code /workspace/defaults"));
+    assert!(script.contains("xdg-open https://restore-defaults.nexum.local"));
+}
+
+#[test]
+fn nexumctl_run_restore_capsule_requires_explicit_surfaces_when_repo_path_missing() {
+    let dir = tempdir().unwrap();
+    let capsule_db = dir.path().join("capsules.sqlite3");
+    let tls_dir = dir.path().join("tls");
+    let events_db = dir.path().join("events.sqlite3");
+    let nexumctl = assert_cmd::cargo::cargo_bin!("nexumctl");
+
+    let create = Command::new(nexumctl)
+        .arg("capsule")
+        .arg("create")
+        .arg("--db")
+        .arg(&capsule_db)
+        .arg("--id")
+        .arg("cap-restore-needs-surfaces")
+        .arg("--name")
+        .arg("Restore Needs Surfaces")
+        .arg("--workspace")
+        .arg("17")
+        .arg("--mode")
+        .arg("host_default")
+        .output()
+        .unwrap();
+    assert!(create.status.success());
+
+    let out = Command::new(nexumctl)
+        .arg("run")
+        .arg("restore-capsule")
+        .arg("--capsule-db")
+        .arg(&capsule_db)
+        .arg("--capsule-id")
+        .arg("cap-restore-needs-surfaces")
+        .arg("--signal")
+        .arg("needs_decision")
+        .arg("--upstream")
+        .arg("127.0.0.1:4773")
+        .arg("--tls-dir")
+        .arg(&tls_dir)
+        .arg("--events-db")
+        .arg(&events_db)
+        .output()
+        .unwrap();
+    assert!(!out.status.success());
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("--terminal"));
+    assert!(stderr.contains("--editor"));
+}

@@ -510,6 +510,7 @@ fn run_command(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
 
     match args[0].as_str() {
         "restore" => run_restore(&args[1..]),
+        "restore-capsule" => run_restore_capsule(&args[1..]),
         _ => {
             usage();
             std::process::exit(2);
@@ -546,6 +547,77 @@ fn run_restore(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
         high_risk_secret_workflow,
         force_isolated_mode,
         capsule_db: optional_arg(args, "--capsule-db").map(PathBuf::from),
+        tls_dir: PathBuf::from(required_arg(args, "--tls-dir")?),
+        events_db: PathBuf::from(required_arg(args, "--events-db")?),
+    })?;
+
+    println!("{}", serde_json::to_string(&summary)?);
+    Ok(())
+}
+
+fn run_restore_capsule(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let capsule_db = PathBuf::from(required_arg(args, "--capsule-db")?);
+    let capsule_id = required_arg(args, "--capsule-id")?;
+    let signal = parse_signal(&required_arg(args, "--signal")?)?;
+    let route_upstream = required_arg(args, "--upstream")?;
+    let routing_socket = optional_arg(args, "--routing-socket").map(PathBuf::from);
+    let identity_collision = optional_arg(args, "--identity-collision")
+        .map(|value| parse_bool(&value))
+        .transpose()?
+        .unwrap_or(false);
+    let high_risk_secret_workflow = optional_arg(args, "--high-risk-secret")
+        .map(|value| parse_bool(&value))
+        .transpose()?
+        .unwrap_or(false);
+    let force_isolated_mode = optional_arg(args, "--force-isolated")
+        .map(|value| parse_bool(&value))
+        .transpose()?
+        .unwrap_or(false);
+
+    let store = CapsuleStore::open(&capsule_db)?;
+    let capsule = store
+        .get(&capsule_id)?
+        .ok_or_else(|| format!("unknown capsule: {capsule_id}"))?;
+
+    let terminal_cmd = if let Some(terminal) = optional_arg(args, "--terminal") {
+        terminal
+    } else if !capsule.repo_path.is_empty() {
+        format!("cd {} && nix develop", capsule.repo_path)
+    } else {
+        return Err(
+            "missing restore surfaces: provide --terminal and --editor or set capsule repo_path"
+                .into(),
+        );
+    };
+
+    let editor_target = if let Some(editor) = optional_arg(args, "--editor") {
+        editor
+    } else if !capsule.repo_path.is_empty() {
+        capsule.repo_path.clone()
+    } else {
+        return Err(
+            "missing restore surfaces: provide --terminal and --editor or set capsule repo_path"
+                .into(),
+        );
+    };
+
+    let browser_url =
+        optional_arg(args, "--browser").unwrap_or_else(|| format!("https://{}", capsule.domain()));
+
+    let summary = run_restore_flow(RestoreRunInput {
+        capsule_id: capsule.capsule_id,
+        display_name: capsule.display_name,
+        workspace: capsule.workspace,
+        signal,
+        terminal_cmd,
+        editor_target,
+        browser_url,
+        route_upstream,
+        routing_socket,
+        identity_collision,
+        high_risk_secret_workflow,
+        force_isolated_mode,
+        capsule_db: Some(capsule_db),
         tls_dir: PathBuf::from(required_arg(args, "--tls-dir")?),
         events_db: PathBuf::from(required_arg(args, "--events-db")?),
     })?;
@@ -642,5 +714,8 @@ fn usage() {
     );
     eprintln!(
         "nexumctl run restore --capsule-id <id> --name <name> --workspace <n> --signal <needs_decision|critical_failure|passive_completion> --terminal <cmd> --editor <path> --browser <url> --upstream <host:port> [--routing-socket <path>] [--identity-collision true|false] [--high-risk-secret true|false] [--force-isolated true|false] [--capsule-db <path>] --tls-dir <path> --events-db <path>"
+    );
+    eprintln!(
+        "nexumctl run restore-capsule --capsule-db <path> --capsule-id <id> --signal <needs_decision|critical_failure|passive_completion> --upstream <host:port> [--terminal <cmd>] [--editor <path>] [--browser <url>] [--routing-socket <path>] [--identity-collision true|false] [--high-risk-secret true|false] [--force-isolated true|false] --tls-dir <path> --events-db <path>"
     );
 }

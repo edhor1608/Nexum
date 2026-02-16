@@ -214,3 +214,15 @@
 ## New Test Coverage (Milestone 22)
 - Restore CLI e2e test validating successful restore transitions state from `archived` to `ready`.
 - Restore CLI e2e test validating routing-unavailable restore transitions state to `degraded`.
+
+## Additional Work (Milestone 23)
+- Added `nexumctl run restore-capsule` command to execute restore from persisted capsule metadata.
+- New restore path loads capsule record from SQLite and derives defaults from `repo_path`:
+  - terminal: `cd <repo_path> && nix develop`
+  - editor: `<repo_path>`
+  - browser: `https://<slug>.nexum.local`
+- Enforced explicit surface input when no `repo_path` exists.
+
+## New Test Coverage (Milestone 23)
+- Restore CLI e2e validating metadata-derived restore defaults from capsule store.
+- Restore CLI e2e validating strict failure when `repo_path` is missing and no explicit terminal/editor are provided.

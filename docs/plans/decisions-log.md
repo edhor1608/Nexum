@@ -285,3 +285,16 @@ Rationale:
 
 Consequences:
 - Restore CLI contract expands with optional capsule DB input, and runflow now has store dependency for lifecycle persistence when enabled.
+
+## ADR-IMPL-023
+Context:
+- Restore CLI required repeated manual metadata input (`name`, `workspace`, default surface paths) even when capsule state was already persisted.
+
+Decision:
+- Add `nexumctl run restore-capsule` to resolve capsule metadata from store and derive default restore surfaces from capsule `repo_path`.
+
+Rationale:
+- Moves restore closer to one-action capsule recovery behavior while reducing input drift between persisted capsule metadata and runtime command invocation.
+
+Consequences:
+- CLI surface expands with store-driven restore entrypoint and explicit validation when repo metadata is insufficient for default surface derivation.
