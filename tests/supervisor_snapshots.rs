@@ -16,7 +16,12 @@ fn seed_supervisor_fixtures(
 ) {
     let mut store = CapsuleStore::open(capsule_db).unwrap();
     store
-        .upsert(Capsule::new("cap-snap-1", "Snap One", CapsuleMode::HostDefault, 41))
+        .upsert(Capsule::new(
+            "cap-snap-1",
+            "Snap One",
+            CapsuleMode::HostDefault,
+            41,
+        ))
         .unwrap();
     store
         .upsert(Capsule::new(

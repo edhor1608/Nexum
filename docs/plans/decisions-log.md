@@ -415,3 +415,16 @@ Rationale:
 
 Consequences:
 - Stead CLI surface now includes batch ingestion endpoint with aggregated processed/succeeded/failed counters and per-event errors.
+
+## ADR-IMPL-033
+Context:
+- Batch Stead ingest gained dispatch support, but lacked a side-effect-free contract check primitive for preflight validation in automation and rollout pipelines.
+
+Decision:
+- Add `stead validate-events` command that parses a JSON array of dispatch envelopes and emits a deterministic validation summary.
+
+Rationale:
+- Enables strict contract verification before restore execution, improving safety for staged rollout orchestration and CI-driven event replay checks.
+
+Consequences:
+- Stead CLI now includes a validation endpoint with stable machine-readable fields (`valid`, `event_count`, `capsule_ids`) for gating automation.

@@ -769,6 +769,7 @@ fn stead_command(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     match args[0].as_str() {
         "dispatch" => stead_dispatch(&args[1..]),
         "dispatch-batch" => stead_dispatch_batch(&args[1..]),
+        "validate-events" => stead_validate_events(&args[1..]),
         _ => {
             usage();
             std::process::exit(2);
@@ -923,6 +924,29 @@ fn dispatch_stead_event(
         events_db,
     })
     .map_err(|error| -> Box<dyn std::error::Error> { Box::new(error) })
+}
+
+fn stead_validate_events(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let events = parse_dispatch_events(&required_arg(args, "--events-json")?)
+        .map_err(|error| error.to_string())?;
+    let event_count = events.len();
+
+    let mut capsule_ids = events
+        .into_iter()
+        .map(|event| event.capsule_id)
+        .collect::<Vec<_>>();
+    capsule_ids.sort();
+    capsule_ids.dedup();
+
+    println!(
+        "{}",
+        serde_json::to_string(&serde_json::json!({
+            "valid": true,
+            "event_count": event_count,
+            "capsule_ids": capsule_ids,
+        }))?
+    );
+    Ok(())
 }
 
 fn run_restore(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
@@ -1121,6 +1145,7 @@ fn usage() {
     eprintln!(
         "nexumctl stead dispatch-batch --capsule-db <path> --events-json <json-array> [--terminal <cmd>] [--editor <path>] [--browser <url>] [--routing-socket <path>] --tls-dir <path> --events-db <path>"
     );
+    eprintln!("nexumctl stead validate-events --events-json <json-array>");
     eprintln!(
         "nexumctl supervisor status --capsule-db <path> --events-db <path> --flags-file <path>"
     );

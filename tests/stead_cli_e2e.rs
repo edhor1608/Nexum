@@ -146,3 +146,24 @@ fn nexumctl_stead_dispatch_batch_reports_per_event_results() {
             .contains("unknown capsule")
     );
 }
+
+#[test]
+fn nexumctl_stead_validate_events_reports_batch_shape() {
+    let nexumctl = assert_cmd::cargo::cargo_bin!("nexumctl");
+    let events = r#"[{"capsule_id":"cap-a","signal":"needs_decision","upstream":"127.0.0.1:4800"},{"capsule_id":"cap-b","signal":"critical_failure","upstream":"127.0.0.1:4801"}]"#;
+
+    let out = Command::new(nexumctl)
+        .arg("stead")
+        .arg("validate-events")
+        .arg("--events-json")
+        .arg(events)
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+
+    let payload: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(payload["valid"], Value::Bool(true));
+    assert_eq!(payload["event_count"], Value::Number(2u64.into()));
+    assert_eq!(payload["capsule_ids"][0], Value::String("cap-a".into()));
+    assert_eq!(payload["capsule_ids"][1], Value::String("cap-b".into()));
+}
