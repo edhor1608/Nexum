@@ -545,6 +545,7 @@ fn run_restore(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
         identity_collision,
         high_risk_secret_workflow,
         force_isolated_mode,
+        capsule_db: optional_arg(args, "--capsule-db").map(PathBuf::from),
         tls_dir: PathBuf::from(required_arg(args, "--tls-dir")?),
         events_db: PathBuf::from(required_arg(args, "--events-db")?),
     })?;
@@ -640,6 +641,6 @@ fn usage() {
         "nexumctl cutover apply-from-events --file <path> --capability <routing|restore|attention> --parity-score <f64> --min-parity-score <f64> --events-db <path> --capsule-id <id> --max-critical-events <u32> --shadow-mode <true|false>"
     );
     eprintln!(
-        "nexumctl run restore --capsule-id <id> --name <name> --workspace <n> --signal <needs_decision|critical_failure|passive_completion> --terminal <cmd> --editor <path> --browser <url> --upstream <host:port> [--routing-socket <path>] [--identity-collision true|false] [--high-risk-secret true|false] [--force-isolated true|false] --tls-dir <path> --events-db <path>"
+        "nexumctl run restore --capsule-id <id> --name <name> --workspace <n> --signal <needs_decision|critical_failure|passive_completion> --terminal <cmd> --editor <path> --browser <url> --upstream <host:port> [--routing-socket <path>] [--identity-collision true|false] [--high-risk-secret true|false] [--force-isolated true|false] [--capsule-db <path>] --tls-dir <path> --events-db <path>"
     );
 }

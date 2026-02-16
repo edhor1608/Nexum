@@ -23,6 +23,7 @@ fn snapshot_restore_runner_summary_contract() {
         identity_collision: false,
         high_risk_secret_workflow: false,
         force_isolated_mode: false,
+        capsule_db: None,
         tls_dir,
         events_db,
     })

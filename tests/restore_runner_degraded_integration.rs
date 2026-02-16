@@ -22,6 +22,7 @@ fn run_restore_flow_degrades_when_routing_socket_is_unavailable() {
         identity_collision: false,
         high_risk_secret_workflow: false,
         force_isolated_mode: false,
+        capsule_db: None,
         tls_dir: dir.path().join("tls"),
         events_db: dir.path().join("events.sqlite3"),
     })

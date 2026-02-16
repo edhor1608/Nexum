@@ -205,3 +205,12 @@
 
 ## New Test Coverage (Milestone 21)
 - Events CLI e2e validating aggregate totals and capsule-level critical counts.
+
+## Additional Work (Milestone 22)
+- Added restore lifecycle state transitions through optional capsule store path wiring.
+- `run restore` now accepts `--capsule-db` and updates capsule state to `restoring` before execution.
+- Final restore state now persists as `ready` on success and `degraded` on degraded outcomes or hard route errors.
+
+## New Test Coverage (Milestone 22)
+- Restore CLI e2e test validating successful restore transitions state from `archived` to `ready`.
+- Restore CLI e2e test validating routing-unavailable restore transitions state to `degraded`.

@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{
-    capsule::{Capsule, CapsuleMode},
+    capsule::{Capsule, CapsuleMode, CapsuleState},
     events::{EventError, EventStore, RuntimeEvent},
     identity::browser_launch_command,
     isolation::{IsolationInput, select_capsule_mode},
@@ -15,6 +15,7 @@ use crate::{
     routing::{RouteCommand, RouteOutcome, RouterState, send_command},
     runtime_meta::{capsule_runtime_env, terminal_process_label},
     shell::{build_niri_shell_plan, render_shell_script},
+    store::StoreError,
     tls::{TlsError, ensure_self_signed_cert},
 };
 
@@ -32,6 +33,7 @@ pub struct RestoreRunInput {
     pub identity_collision: bool,
     pub high_risk_secret_workflow: bool,
     pub force_isolated_mode: bool,
+    pub capsule_db: Option<PathBuf>,
     pub tls_dir: PathBuf,
     pub events_db: PathBuf,
 }
@@ -55,11 +57,19 @@ pub enum RunFlowError {
     Tls(#[from] TlsError),
     #[error("events: {0}")]
     Events(#[from] EventError),
+    #[error("store: {0}")]
+    Store(#[from] StoreError),
     #[error("routing failed: {0}")]
     Routing(String),
 }
 
 pub fn run_restore_flow(input: RestoreRunInput) -> Result<RestoreRunSummary, RunFlowError> {
+    transition_capsule_state(
+        input.capsule_db.as_ref(),
+        &input.capsule_id,
+        CapsuleState::Restoring,
+    )?;
+
     let mode = select_capsule_mode(&IsolationInput {
         identity_collision_detected: input.identity_collision,
         high_risk_secret_workflow: input.high_risk_secret_workflow,
@@ -87,7 +97,17 @@ pub fn run_restore_flow(input: RestoreRunInput) -> Result<RestoreRunSummary, Run
 
     let tls = ensure_self_signed_cert(&input.tls_dir, &capsule.domain(), 30)?;
 
-    let route_status = ensure_route(&capsule, &input)?;
+    let route_status = match ensure_route(&capsule, &input) {
+        Ok(status) => status,
+        Err(error) => {
+            transition_capsule_state(
+                input.capsule_db.as_ref(),
+                &input.capsule_id,
+                CapsuleState::Degraded,
+            )?;
+            return Err(error);
+        }
+    };
 
     let shell_script = apply_browser_launch_policy(
         render_shell_script(&build_niri_shell_plan(&restore)),
@@ -138,6 +158,16 @@ pub fn run_restore_flow(input: RestoreRunInput) -> Result<RestoreRunSummary, Run
         ts_unix_ms: now_unix_ms(),
     })?;
 
+    transition_capsule_state(
+        input.capsule_db.as_ref(),
+        &input.capsule_id,
+        if degraded {
+            CapsuleState::Degraded
+        } else {
+            CapsuleState::Ready
+        },
+    )?;
+
     Ok(RestoreRunSummary {
         capsule_id: capsule.capsule_id.clone(),
         domain: capsule.domain(),
@@ -149,6 +179,18 @@ pub fn run_restore_flow(input: RestoreRunInput) -> Result<RestoreRunSummary, Run
         tls_fingerprint_sha256: tls.fingerprint_sha256,
         events_written: 3,
     })
+}
+
+fn transition_capsule_state(
+    capsule_db: Option<&PathBuf>,
+    capsule_id: &str,
+    state: CapsuleState,
+) -> Result<(), RunFlowError> {
+    if let Some(path) = capsule_db {
+        let mut store = crate::store::CapsuleStore::open(path)?;
+        store.transition_state(capsule_id, state)?;
+    }
+    Ok(())
 }
 
 fn now_unix_ms() -> u64 {

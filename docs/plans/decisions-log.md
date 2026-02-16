@@ -272,3 +272,16 @@ Rationale:
 
 Consequences:
 - Events CLI contract expands with a summary endpoint and stable JSON shape for monitoring/tooling consumers.
+
+## ADR-IMPL-022
+Context:
+- Capsule lifecycle states were persisted and mutable, but restore execution did not drive state transitions in the store.
+
+Decision:
+- Add optional restore-store wiring (`--capsule-db`) so runflow transitions capsule state to `restoring` and then finalizes to `ready` or `degraded`.
+
+Rationale:
+- Aligns runtime behavior with capsule lifecycle contract and makes restore health visible in persisted control-plane state.
+
+Consequences:
+- Restore CLI contract expands with optional capsule DB input, and runflow now has store dependency for lifecycle persistence when enabled.

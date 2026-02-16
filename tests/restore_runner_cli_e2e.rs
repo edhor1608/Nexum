@@ -309,3 +309,159 @@ fn nexumctl_run_restore_returns_degraded_summary_when_routing_socket_is_unavaila
             .contains("route_unavailable")
     );
 }
+
+#[test]
+fn nexumctl_run_restore_marks_capsule_ready_in_store_on_success() {
+    let dir = tempdir().unwrap();
+    let capsule_db = dir.path().join("capsules.sqlite3");
+    let tls_dir = dir.path().join("tls");
+    let events_db = dir.path().join("events.sqlite3");
+    let nexumctl = assert_cmd::cargo::cargo_bin!("nexumctl");
+
+    let create = Command::new(nexumctl)
+        .arg("capsule")
+        .arg("create")
+        .arg("--db")
+        .arg(&capsule_db)
+        .arg("--id")
+        .arg("cap-state-ready")
+        .arg("--name")
+        .arg("Capsule State Ready")
+        .arg("--workspace")
+        .arg("14")
+        .arg("--mode")
+        .arg("host_default")
+        .output()
+        .unwrap();
+    assert!(create.status.success());
+
+    let set_archived = Command::new(nexumctl)
+        .arg("capsule")
+        .arg("set-state")
+        .arg("--db")
+        .arg(&capsule_db)
+        .arg("--id")
+        .arg("cap-state-ready")
+        .arg("--state")
+        .arg("archived")
+        .output()
+        .unwrap();
+    assert!(set_archived.status.success());
+
+    let restore = Command::new(nexumctl)
+        .arg("run")
+        .arg("restore")
+        .arg("--capsule-id")
+        .arg("cap-state-ready")
+        .arg("--name")
+        .arg("Capsule State Ready")
+        .arg("--workspace")
+        .arg("14")
+        .arg("--signal")
+        .arg("needs_decision")
+        .arg("--terminal")
+        .arg("cd /workspace/state-ready && nix develop")
+        .arg("--editor")
+        .arg("/workspace/state-ready")
+        .arg("--browser")
+        .arg("https://state-ready.nexum.local")
+        .arg("--upstream")
+        .arg("127.0.0.1:4770")
+        .arg("--capsule-db")
+        .arg(&capsule_db)
+        .arg("--tls-dir")
+        .arg(&tls_dir)
+        .arg("--events-db")
+        .arg(&events_db)
+        .output()
+        .unwrap();
+    assert!(restore.status.success());
+
+    let list = Command::new(nexumctl)
+        .arg("capsule")
+        .arg("list")
+        .arg("--db")
+        .arg(&capsule_db)
+        .output()
+        .unwrap();
+    assert!(list.status.success());
+    let payload: Value = serde_json::from_slice(&list.stdout).unwrap();
+    assert_eq!(
+        payload[0]["capsule_id"],
+        Value::String("cap-state-ready".into())
+    );
+    assert_eq!(payload[0]["state"], Value::String("ready".into()));
+}
+
+#[test]
+fn nexumctl_run_restore_marks_capsule_degraded_in_store_on_route_unavailable() {
+    let dir = tempdir().unwrap();
+    let capsule_db = dir.path().join("capsules.sqlite3");
+    let missing_socket = dir.path().join("missing.sock");
+    let tls_dir = dir.path().join("tls");
+    let events_db = dir.path().join("events.sqlite3");
+    let nexumctl = assert_cmd::cargo::cargo_bin!("nexumctl");
+
+    let create = Command::new(nexumctl)
+        .arg("capsule")
+        .arg("create")
+        .arg("--db")
+        .arg(&capsule_db)
+        .arg("--id")
+        .arg("cap-state-degraded")
+        .arg("--name")
+        .arg("Capsule State Degraded")
+        .arg("--workspace")
+        .arg("15")
+        .arg("--mode")
+        .arg("host_default")
+        .output()
+        .unwrap();
+    assert!(create.status.success());
+
+    let restore = Command::new(nexumctl)
+        .arg("run")
+        .arg("restore")
+        .arg("--capsule-id")
+        .arg("cap-state-degraded")
+        .arg("--name")
+        .arg("Capsule State Degraded")
+        .arg("--workspace")
+        .arg("15")
+        .arg("--signal")
+        .arg("needs_decision")
+        .arg("--terminal")
+        .arg("cd /workspace/state-degraded && nix develop")
+        .arg("--editor")
+        .arg("/workspace/state-degraded")
+        .arg("--browser")
+        .arg("https://state-degraded.nexum.local")
+        .arg("--upstream")
+        .arg("127.0.0.1:4771")
+        .arg("--routing-socket")
+        .arg(&missing_socket)
+        .arg("--capsule-db")
+        .arg(&capsule_db)
+        .arg("--tls-dir")
+        .arg(&tls_dir)
+        .arg("--events-db")
+        .arg(&events_db)
+        .output()
+        .unwrap();
+    assert!(restore.status.success());
+
+    let list = Command::new(nexumctl)
+        .arg("capsule")
+        .arg("list")
+        .arg("--db")
+        .arg(&capsule_db)
+        .output()
+        .unwrap();
+    assert!(list.status.success());
+    let payload: Value = serde_json::from_slice(&list.stdout).unwrap();
+    assert_eq!(
+        payload[0]["capsule_id"],
+        Value::String("cap-state-degraded".into())
+    );
+    assert_eq!(payload[0]["state"], Value::String("degraded".into()));
+}
