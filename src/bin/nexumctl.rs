@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use nexum::{
     capsule::{Capsule, CapsuleMode},
+    cutover::{CutoverInput, apply_cutover, evaluate_cutover, parse_capability},
     flags::{CutoverFlags, FlagName},
     shadow::{ExecutionResult, compare_execution},
     shell::{NiriShellCommand, NiriShellPlan, render_shell_script},
@@ -22,6 +23,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "parity" => parity_command(&args[1..])?,
         "shell" => shell_command(&args[1..])?,
         "tls" => tls_command(&args[1..])?,
+        "cutover" => cutover_command(&args[1..])?,
         _ => {
             usage();
             std::process::exit(2);
@@ -235,6 +237,48 @@ fn tls_rotate(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+fn cutover_command(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    if args.is_empty() {
+        usage();
+        std::process::exit(2);
+    }
+
+    match args[0].as_str() {
+        "apply" => cutover_apply(&args[1..]),
+        _ => {
+            usage();
+            std::process::exit(2);
+        }
+    }
+}
+
+fn cutover_apply(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let file = PathBuf::from(required_arg(args, "--file")?);
+    let capability = parse_capability(&required_arg(args, "--capability")?)
+        .ok_or_else(|| "invalid capability".to_string())?;
+    let parity_score = required_arg(args, "--parity-score")?.parse::<f64>()?;
+    let min_parity_score = required_arg(args, "--min-parity-score")?.parse::<f64>()?;
+    let critical_events = required_arg(args, "--critical-events")?.parse::<u32>()?;
+    let max_critical_events = required_arg(args, "--max-critical-events")?.parse::<u32>()?;
+    let shadow_mode_enabled = parse_bool(&required_arg(args, "--shadow-mode")?)?;
+
+    let decision = evaluate_cutover(&CutoverInput {
+        capability,
+        parity_score,
+        min_parity_score,
+        critical_events,
+        max_critical_events,
+        shadow_mode_enabled,
+    });
+
+    let mut flags = CutoverFlags::load_or_default(&file)?;
+    apply_cutover(&mut flags, &decision, capability);
+    flags.save(&file)?;
+
+    println!("{}", serde_json::to_string(&decision)?);
+    Ok(())
+}
+
 fn required_arg(args: &[String], key: &str) -> Result<String, Box<dyn std::error::Error>> {
     let pos = args
         .iter()
@@ -291,4 +335,7 @@ fn usage() {
     );
     eprintln!("nexumctl tls ensure --dir <path> --domain <domain> [--validity-days <days>]");
     eprintln!("nexumctl tls rotate --dir <path> --domain <domain> --threshold-days <days>");
+    eprintln!(
+        "nexumctl cutover apply --file <path> --capability <routing|restore|attention> --parity-score <f64> --min-parity-score <f64> --critical-events <u32> --max-critical-events <u32> --shadow-mode <true|false>"
+    );
 }

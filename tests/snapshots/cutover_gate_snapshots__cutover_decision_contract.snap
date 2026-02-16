@@ -1,0 +1,10 @@
+---
+source: tests/cutover_gate_snapshots.rs
+assertion_line: 14
+expression: decision
+---
+capability: restore
+allowed: false
+reasons:
+  - "parity below threshold: 0.94 < 0.95"
+flag_to_enable: ~
