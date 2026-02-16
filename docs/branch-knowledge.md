@@ -268,3 +268,11 @@
 
 ## New Test Coverage (Milestone 27)
 - Supervisor CLI e2e validating blocker selection and reason tags for degraded/critical capsules.
+
+## Additional Work (Milestone 28)
+- Added `nexumctl cutover apply-from-summary` command for global runtime gate evaluation.
+- New path computes critical-event input from event-store summary (`critical_events` total), then reuses existing cutover evaluator/flag application flow.
+
+## New Test Coverage (Milestone 28)
+- Cutover events CLI e2e for global-summary allow case (within threshold).
+- Cutover events CLI e2e for global-summary deny case (threshold exceeded).

@@ -350,3 +350,16 @@ Rationale:
 
 Consequences:
 - CLI supervisor surface now includes blocker-specific endpoint and stable reason taxonomy.
+
+## ADR-IMPL-028
+Context:
+- Event-driven cutover gating existed only at capsule granularity, requiring manual capsule targeting for broader rollout decisions.
+
+Decision:
+- Add `cutover apply-from-summary` to gate capability cutovers using global critical-event totals from runtime event summary.
+
+Rationale:
+- Supports safer capability-level rollout decisions with a single global health signal aligned to shadow-mode migration gates.
+
+Consequences:
+- Cutover CLI now supports both capsule-scoped and global-summary event gate inputs.

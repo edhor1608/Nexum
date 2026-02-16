@@ -600,6 +600,7 @@ fn cutover_command(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     match args[0].as_str() {
         "apply" => cutover_apply(&args[1..]),
         "apply-from-events" => cutover_apply_from_events(&args[1..]),
+        "apply-from-summary" => cutover_apply_from_summary(&args[1..]),
         _ => {
             usage();
             std::process::exit(2);
@@ -647,6 +648,36 @@ fn cutover_apply_from_events(args: &[String]) -> Result<(), Box<dyn std::error::
 
     let events = EventStore::open(&events_db)?;
     let critical_events = events.count_for_capsule_level(&capsule_id, "critical")?;
+
+    let decision = evaluate_cutover(&CutoverInput {
+        capability,
+        parity_score,
+        min_parity_score,
+        critical_events,
+        max_critical_events,
+        shadow_mode_enabled,
+    });
+
+    let mut flags = CutoverFlags::load_or_default(&file)?;
+    apply_cutover(&mut flags, &decision, capability);
+    flags.save(&file)?;
+
+    println!("{}", serde_json::to_string(&decision)?);
+    Ok(())
+}
+
+fn cutover_apply_from_summary(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let file = PathBuf::from(required_arg(args, "--file")?);
+    let capability = parse_capability(&required_arg(args, "--capability")?)
+        .ok_or_else(|| "invalid capability".to_string())?;
+    let parity_score = required_arg(args, "--parity-score")?.parse::<f64>()?;
+    let min_parity_score = required_arg(args, "--min-parity-score")?.parse::<f64>()?;
+    let events_db = PathBuf::from(required_arg(args, "--events-db")?);
+    let max_critical_events = required_arg(args, "--max-critical-events")?.parse::<u32>()?;
+    let shadow_mode_enabled = parse_bool(&required_arg(args, "--shadow-mode")?)?;
+
+    let events = EventStore::open(&events_db)?;
+    let critical_events = events.summary()?.critical_events;
 
     let decision = evaluate_cutover(&CutoverInput {
         capability,
@@ -958,6 +989,9 @@ fn usage() {
     );
     eprintln!(
         "nexumctl cutover apply-from-events --file <path> --capability <routing|restore|attention> --parity-score <f64> --min-parity-score <f64> --events-db <path> --capsule-id <id> --max-critical-events <u32> --shadow-mode <true|false>"
+    );
+    eprintln!(
+        "nexumctl cutover apply-from-summary --file <path> --capability <routing|restore|attention> --parity-score <f64> --min-parity-score <f64> --events-db <path> --max-critical-events <u32> --shadow-mode <true|false>"
     );
     eprintln!(
         "nexumctl run restore --capsule-id <id> --name <name> --workspace <n> --signal <needs_decision|critical_failure|passive_completion> --terminal <cmd> --editor <path> --browser <url> --upstream <host:port> [--routing-socket <path>] [--identity-collision true|false] [--high-risk-secret true|false] [--force-isolated true|false] [--capsule-db <path>] --tls-dir <path> --events-db <path>"
