@@ -118,3 +118,29 @@ fn nexumctl_can_export_capsules_as_yaml() {
     assert!(stdout.contains("repo_path: /workspace/export-capsule"));
     assert!(stdout.contains("state: ready"));
 }
+
+#[test]
+fn nexumctl_reports_workspace_parse_error_with_flag_context() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = dir.path().join("capsules.sqlite3");
+    let nexumctl = assert_cmd::cargo::cargo_bin!("nexumctl");
+
+    let created = Command::new(nexumctl)
+        .arg("capsule")
+        .arg("create")
+        .arg("--db")
+        .arg(&db)
+        .arg("--id")
+        .arg("cap-cli-invalid-workspace")
+        .arg("--name")
+        .arg("Invalid Workspace")
+        .arg("--workspace")
+        .arg("not-a-number")
+        .arg("--mode")
+        .arg("host_default")
+        .output()
+        .unwrap();
+    assert!(!created.status.success());
+    let stderr = String::from_utf8(created.stderr).unwrap();
+    assert!(stderr.contains("failed to parse --workspace as u16"));
+}

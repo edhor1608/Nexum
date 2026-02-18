@@ -10,6 +10,7 @@ use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
     net::{UnixListener, UnixStream},
     sync::oneshot,
+    time::{Duration, timeout},
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -108,6 +109,8 @@ pub enum RoutingError {
     Io(#[from] std::io::Error),
     #[error("json: {0}")]
     Json(#[from] serde_json::Error),
+    #[error("timeout waiting for route response")]
+    Timeout,
 }
 
 pub async fn send_command(
@@ -123,7 +126,9 @@ pub async fn send_command(
 
     let mut reader = BufReader::new(stream);
     let mut response = String::new();
-    reader.read_line(&mut response).await?;
+    timeout(Duration::from_secs(3), reader.read_line(&mut response))
+        .await
+        .map_err(|_| RoutingError::Timeout)??;
 
     Ok(serde_json::from_str(response.trim_end())?)
 }
@@ -152,7 +157,9 @@ pub async fn serve_unix_socket(
                 let (stream, _) = accepted?;
                 let state = Arc::clone(&state);
                 tokio::spawn(async move {
-                    let _ = handle_connection(stream, state).await;
+                    if let Err(error) = handle_connection(stream, state).await {
+                        eprintln!("connection handling failed: {error}");
+                    }
                 });
             }
         }

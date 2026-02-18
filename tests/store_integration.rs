@@ -1,6 +1,6 @@
 use nexum::{
     capsule::{Capsule, CapsuleMode},
-    store::CapsuleStore,
+    store::{CapsuleStore, StoreError},
 };
 use tempfile::tempdir;
 
@@ -31,10 +31,13 @@ fn sqlite_store_persists_capsules_across_reopen() {
 
     let store = CapsuleStore::open(&db).unwrap();
     let listed = store.list().unwrap();
+    let mut ids = listed
+        .into_iter()
+        .map(|capsule| capsule.capsule_id)
+        .collect::<Vec<_>>();
+    ids.sort();
 
-    assert_eq!(listed.len(), 2);
-    assert_eq!(listed[0].capsule_id, "cap-store-1");
-    assert_eq!(listed[1].capsule_id, "cap-store-2");
+    assert_eq!(ids, vec!["cap-store-1", "cap-store-2"]);
 }
 
 #[test]
@@ -133,4 +136,23 @@ fn store_persists_capsule_repo_path_updates() {
 
     let loaded = store.get("cap-store-repo").unwrap().unwrap();
     assert_eq!(loaded.repo_path, "/workspace/repo-capsule");
+}
+
+#[test]
+fn store_rejects_slug_change_for_existing_capsule() {
+    let dir = tempdir().unwrap();
+    let db = dir.path().join("capsules.sqlite3");
+
+    let mut store = CapsuleStore::open(&db).unwrap();
+    let mut capsule = Capsule::new(
+        "cap-store-slug",
+        "Slug Capsule",
+        CapsuleMode::HostDefault,
+        5,
+    );
+    store.upsert(capsule.clone()).unwrap();
+
+    capsule.slug = "manually-mutated".to_string();
+    let error = store.upsert(capsule).unwrap_err();
+    assert!(matches!(error, StoreError::ImmutableSlug { .. }));
 }

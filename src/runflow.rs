@@ -213,6 +213,7 @@ fn ensure_route(
     if let Some(socket) = &input.routing_socket {
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_io()
+            .enable_time()
             .build()
             .map_err(|error| RunFlowError::Routing(error.to_string()))?;
 

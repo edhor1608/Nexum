@@ -1,3 +1,5 @@
+use std::{fmt, str::FromStr};
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -5,6 +7,24 @@ use serde::{Deserialize, Serialize};
 pub enum CapsuleMode {
     HostDefault,
     IsolatedNixShell,
+}
+
+impl FromStr for CapsuleMode {
+    type Err = String;
+
+    fn from_str(input: &str) -> Result<Self, Self::Err> {
+        match input {
+            "host_default" => Ok(Self::HostDefault),
+            "isolated_nix_shell" => Ok(Self::IsolatedNixShell),
+            _ => Err(format!("invalid mode: {input}")),
+        }
+    }
+}
+
+impl fmt::Display for CapsuleMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(mode_to_str(*self))
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -95,6 +115,13 @@ pub fn parse_state(input: &str) -> Option<CapsuleState> {
         "degraded" => Some(CapsuleState::Degraded),
         "archived" => Some(CapsuleState::Archived),
         _ => None,
+    }
+}
+
+pub fn mode_to_str(mode: CapsuleMode) -> &'static str {
+    match mode {
+        CapsuleMode::HostDefault => "host_default",
+        CapsuleMode::IsolatedNixShell => "isolated_nix_shell",
     }
 }
 

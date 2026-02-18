@@ -1,4 +1,8 @@
-use std::path::Path;
+use std::{
+    io::Write,
+    path::{Path, PathBuf},
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -56,8 +60,20 @@ impl CutoverFlags {
         }
 
         let content = toml::to_string_pretty(self)?;
-        std::fs::write(path, content)?;
-        Ok(())
+        let temp_path = temporary_path(path);
+        let write_result = (|| -> Result<(), FlagError> {
+            let mut file = std::fs::File::create(&temp_path)?;
+            file.write_all(content.as_bytes())?;
+            file.sync_all()?;
+            std::fs::rename(&temp_path, path)?;
+            Ok(())
+        })();
+
+        if write_result.is_err() {
+            let _ = std::fs::remove_file(&temp_path);
+        }
+
+        write_result
     }
 
     pub fn set(&mut self, name: FlagName, enabled: bool) {
@@ -68,4 +84,16 @@ impl CutoverFlags {
             FlagName::AttentionControlPlane => self.attention_control_plane = enabled,
         }
     }
+}
+
+fn temporary_path(path: &Path) -> PathBuf {
+    let file_name = path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or("flags.toml");
+    let stamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|value| value.as_nanos())
+        .unwrap_or(0);
+    path.with_file_name(format!(".{file_name}.tmp.{}.{}", std::process::id(), stamp))
 }

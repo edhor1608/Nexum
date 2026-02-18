@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use nexum::routing::{RouteCommand, RouteOutcome, send_command, serve_unix_socket};
 use tempfile::tempdir;
+use tokio::net::UnixStream;
 use tokio::{sync::oneshot, task::JoinHandle};
 
 async fn start_server(socket: &std::path::Path) -> (oneshot::Sender<()>, JoinHandle<()>) {
@@ -15,7 +16,7 @@ async fn start_server(socket: &std::path::Path) -> (oneshot::Sender<()>, JoinHan
     });
 
     for _ in 0..20 {
-        if socket_path.exists() {
+        if UnixStream::connect(&socket_path).await.is_ok() {
             break;
         }
         tokio::time::sleep(Duration::from_millis(25)).await;

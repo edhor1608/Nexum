@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use nexum::{
     attention::{AttentionEvent, AttentionPolicy, AttentionPriority, RoutedAttention},
-    capsule::{Capsule, CapsuleMode, CapsuleState, parse_state, state_to_str},
+    capsule::{Capsule, CapsuleMode, CapsuleState, mode_to_str, parse_state, state_to_str},
     cutover::{CutoverInput, apply_cutover, evaluate_cutover, parse_capability},
     events::EventStore,
     flags::{CutoverFlags, FlagName},
@@ -215,7 +215,7 @@ fn capsule_create(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let db = required_arg(args, "--db")?;
     let id = required_arg(args, "--id")?;
     let name = required_arg(args, "--name")?;
-    let workspace = required_arg(args, "--workspace")?.parse::<u16>()?;
+    let workspace = parse_u16_arg(args, "--workspace")?;
     let mode = required_arg(args, "--mode")?;
     let repo_path = optional_arg(args, "--repo-path").unwrap_or_default();
 
@@ -308,8 +308,8 @@ fn capsule_set_repo(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
 fn capsule_allocate_port(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let db = required_arg(args, "--db")?;
     let id = required_arg(args, "--id")?;
-    let start = required_arg(args, "--start")?.parse::<u16>()?;
-    let end = required_arg(args, "--end")?.parse::<u16>()?;
+    let start = parse_u16_arg(args, "--start")?;
+    let end = parse_u16_arg(args, "--end")?;
 
     let mut store = CapsuleStore::open(&PathBuf::from(db))?;
     let port = store.allocate_port(&id, start, end)?;
@@ -528,6 +528,7 @@ fn route_request(
 ) -> Result<nexum::routing::RouteOutcome, Box<dyn std::error::Error>> {
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_io()
+        .enable_time()
         .build()?;
     Ok(runtime.block_on(send_command(&socket, command))?)
 }
@@ -548,7 +549,7 @@ fn shell_command(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn shell_render(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
-    let workspace = required_arg(args, "--workspace")?.parse::<u16>()?;
+    let workspace = parse_u16_arg(args, "--workspace")?;
     let terminal = required_arg(args, "--terminal")?;
     let editor = required_arg(args, "--editor")?;
     let browser = required_arg(args, "--browser")?;
@@ -849,9 +850,11 @@ fn stead_dispatch_batch(args: &[String]) -> Result<(), Box<dyn std::error::Error
     if fail_on_missing_capsules {
         let missing_capsule_ids = find_missing_capsule_ids(&capsule_db, &events)?;
         if !missing_capsule_ids.is_empty() {
-            return Err(
-                format!("unknown capsules in batch: {}", missing_capsule_ids.join(", ")).into(),
-            );
+            return Err(format!(
+                "unknown capsules in batch: {}",
+                missing_capsule_ids.join(", ")
+            )
+            .into());
         }
     }
 
@@ -1128,7 +1131,7 @@ fn run_restore(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let summary = run_restore_flow(RestoreRunInput {
         capsule_id: required_arg(args, "--capsule-id")?,
         display_name: required_arg(args, "--name")?,
-        workspace: required_arg(args, "--workspace")?.parse::<u16>()?,
+        workspace: parse_u16_arg(args, "--workspace")?,
         signal,
         terminal_cmd: required_arg(args, "--terminal")?,
         editor_target: required_arg(args, "--editor")?,
@@ -1244,6 +1247,13 @@ fn parse_mode(input: &str) -> Result<CapsuleMode, Box<dyn std::error::Error>> {
     }
 }
 
+fn parse_u16_arg(args: &[String], key: &str) -> Result<u16, Box<dyn std::error::Error>> {
+    let value = required_arg(args, key)?;
+    value
+        .parse::<u16>()
+        .map_err(|error| format!("failed to parse {key} as u16: {error}").into())
+}
+
 fn write_output_file(path: &PathBuf, payload: &str) -> Result<(), Box<dyn std::error::Error>> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
@@ -1266,13 +1276,6 @@ fn parse_signal(input: &str) -> Result<SignalType, Box<dyn std::error::Error>> {
         "critical_failure" => Ok(SignalType::CriticalFailure),
         "passive_completion" => Ok(SignalType::PassiveCompletion),
         _ => Err(format!("invalid signal: {input}").into()),
-    }
-}
-
-fn mode_to_str(mode: CapsuleMode) -> &'static str {
-    match mode {
-        CapsuleMode::HostDefault => "host_default",
-        CapsuleMode::IsolatedNixShell => "isolated_nix_shell",
     }
 }
 

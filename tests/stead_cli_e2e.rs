@@ -195,7 +195,8 @@ fn nexumctl_stead_dispatch_batch_writes_report_file() {
         .unwrap();
     assert!(create.status.success());
 
-    let events = r#"[{"capsule_id":"cap-report","signal":"needs_decision","upstream":"127.0.0.1:4794"}]"#;
+    let events =
+        r#"[{"capsule_id":"cap-report","signal":"needs_decision","upstream":"127.0.0.1:4794"}]"#;
     let out = Command::new(nexumctl)
         .arg("stead")
         .arg("dispatch-batch")
@@ -407,7 +408,10 @@ fn nexumctl_stead_validate_events_reports_missing_capsules_when_db_is_provided()
     assert_eq!(payload["valid"], Value::Bool(false));
     assert_eq!(payload["event_count"], Value::Number(3u64.into()));
     assert_eq!(payload["capsule_ids"][0], Value::String("cap-known".into()));
-    assert_eq!(payload["capsule_ids"][1], Value::String("cap-missing".into()));
+    assert_eq!(
+        payload["capsule_ids"][1],
+        Value::String("cap-missing".into())
+    );
     assert_eq!(
         payload["missing_capsule_ids"],
         Value::Array(vec![Value::String("cap-missing".into())])
@@ -437,7 +441,16 @@ fn nexumctl_stead_attention_plan_routes_priorities_and_focus() {
         payload["focus_capsule_id"],
         Value::String("cap-critical".into())
     );
-    assert_eq!(payload["routes"][0]["priority"], Value::String("passive".into()));
-    assert_eq!(payload["routes"][1]["priority"], Value::String("active".into()));
-    assert_eq!(payload["routes"][2]["priority"], Value::String("blocking".into()));
+    assert_eq!(
+        payload["routes"][0]["priority"],
+        Value::String("passive".into())
+    );
+    assert_eq!(
+        payload["routes"][1]["priority"],
+        Value::String("active".into())
+    );
+    assert_eq!(
+        payload["routes"][2]["priority"],
+        Value::String("blocking".into())
+    );
 }

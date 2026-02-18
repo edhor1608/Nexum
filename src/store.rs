@@ -1,9 +1,9 @@
 use std::path::Path;
 
-use rusqlite::{Connection, OptionalExtension, params};
+use rusqlite::{Connection, OptionalExtension, params, types::Type};
 use thiserror::Error;
 
-use crate::capsule::{Capsule, CapsuleMode, CapsuleState, parse_state, state_to_str};
+use crate::capsule::{Capsule, CapsuleMode, CapsuleState, mode_to_str, parse_state, state_to_str};
 
 #[derive(Debug)]
 pub struct CapsuleStore {
@@ -18,6 +18,14 @@ pub enum StoreError {
     Io(#[from] std::io::Error),
     #[error("yaml: {0}")]
     Yaml(#[from] serde_yaml::Error),
+    #[error(
+        "slug is immutable for capsule '{capsule_id}': existing='{existing_slug}' attempted='{attempted_slug}'"
+    )]
+    ImmutableSlug {
+        capsule_id: String,
+        existing_slug: String,
+        attempted_slug: String,
+    },
 }
 
 impl CapsuleStore {
@@ -51,12 +59,21 @@ impl CapsuleStore {
     }
 
     pub fn upsert(&mut self, capsule: Capsule) -> Result<(), StoreError> {
+        if let Some(existing) = self.get(&capsule.capsule_id)? {
+            if existing.slug != capsule.slug {
+                return Err(StoreError::ImmutableSlug {
+                    capsule_id: capsule.capsule_id.clone(),
+                    existing_slug: existing.slug,
+                    attempted_slug: capsule.slug.clone(),
+                });
+            }
+        }
+
         self.conn.execute(
             "
             INSERT INTO capsules (capsule_id, slug, display_name, repo_path, mode, state, workspace)
             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
             ON CONFLICT(capsule_id) DO UPDATE SET
-                slug = excluded.slug,
                 display_name = excluded.display_name,
                 repo_path = excluded.repo_path,
                 mode = excluded.mode,
@@ -189,29 +206,18 @@ impl CapsuleStore {
 fn row_to_capsule(row: &rusqlite::Row<'_>) -> rusqlite::Result<Capsule> {
     let mode: String = row.get(4)?;
     let state: String = row.get(5)?;
+    let parsed_mode = mode
+        .parse::<CapsuleMode>()
+        .map_err(|error| rusqlite::Error::FromSqlConversionFailure(4, Type::Text, error.into()))?;
     Ok(Capsule {
         capsule_id: row.get(0)?,
         slug: row.get(1)?,
         display_name: row.get(2)?,
         repo_path: row.get(3)?,
-        mode: parse_mode(&mode),
+        mode: parsed_mode,
         state: parse_state(&state).unwrap_or(CapsuleState::Ready),
         workspace: row.get(6)?,
     })
-}
-
-fn parse_mode(value: &str) -> CapsuleMode {
-    match value {
-        "isolated_nix_shell" => CapsuleMode::IsolatedNixShell,
-        _ => CapsuleMode::HostDefault,
-    }
-}
-
-fn mode_to_str(mode: CapsuleMode) -> &'static str {
-    match mode {
-        CapsuleMode::HostDefault => "host_default",
-        CapsuleMode::IsolatedNixShell => "isolated_nix_shell",
-    }
 }
 
 fn add_state_column_if_missing(conn: &Connection) -> Result<(), StoreError> {

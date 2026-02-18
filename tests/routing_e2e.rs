@@ -50,6 +50,7 @@ fn daemon_binary_serves_json_over_unix_socket() {
     BufReader::new(stream).read_line(&mut line).unwrap();
     assert!(line.contains("ok"));
 
+    // Hard-kill is intentional in this test to guarantee cleanup of the daemon process.
     child.kill().unwrap();
     let _ = child.wait();
 }

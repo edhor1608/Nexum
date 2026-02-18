@@ -20,6 +20,7 @@ fn wait_for_socket(socket: &std::path::Path) {
 fn routing_call(socket: &std::path::Path, command: RouteCommand) -> RouteOutcome {
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_io()
+        .enable_time()
         .build()
         .unwrap();
     runtime.block_on(send_command(socket, command)).unwrap()
