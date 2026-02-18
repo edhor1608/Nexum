@@ -1,17 +1,7 @@
-use std::{process::Command, time::Duration};
+use std::process::Command;
 
 use serde_json::Value;
 use tempfile::tempdir;
-
-fn wait_for_socket(socket: &std::path::Path) {
-    for _ in 0..40 {
-        if socket.exists() {
-            return;
-        }
-        std::thread::sleep(Duration::from_millis(25));
-    }
-    panic!("daemon socket not ready: {}", socket.display());
-}
 
 #[test]
 fn nexumctl_run_restore_executes_end_to_end_plan() {
@@ -46,7 +36,11 @@ fn nexumctl_run_restore_executes_end_to_end_plan() {
         .output()
         .unwrap();
 
-    assert!(out.status.success());
+    assert!(
+        out.status.success(),
+        "nexumctl stderr: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     let value: Value = serde_json::from_slice(&out.stdout).unwrap();
 
     assert_eq!(value["capsule_id"], Value::String("cap-run-cli".into()));
@@ -55,74 +49,7 @@ fn nexumctl_run_restore_executes_end_to_end_plan() {
         value["shell_script"]
             .as_str()
             .unwrap()
-            .contains("xdg-open https://runner-cli.nexum.local")
+            .contains("xdg-open 'https://runner-cli.nexum.local'")
     );
     assert_eq!(value["events_written"], Value::Number(3u64.into()));
-}
-
-#[test]
-fn nexumctl_run_restore_registers_route_via_daemon_socket() {
-    let dir = tempdir().unwrap();
-    let socket = dir.path().join("nexumd.sock");
-    let tls_dir = dir.path().join("tls");
-    let events_db = dir.path().join("events.sqlite3");
-
-    let mut daemon = Command::new(assert_cmd::cargo::cargo_bin!("nexumd"))
-        .arg("serve")
-        .arg("--socket")
-        .arg(&socket)
-        .spawn()
-        .unwrap();
-
-    wait_for_socket(&socket);
-
-    let nexumctl = assert_cmd::cargo::cargo_bin!("nexumctl");
-    let out = Command::new(nexumctl)
-        .arg("run")
-        .arg("restore")
-        .arg("--capsule-id")
-        .arg("cap-run-cli-daemon")
-        .arg("--name")
-        .arg("Runner CLI Daemon")
-        .arg("--workspace")
-        .arg("7")
-        .arg("--signal")
-        .arg("needs_decision")
-        .arg("--terminal")
-        .arg("cd /workspace/cli-daemon && nix develop")
-        .arg("--editor")
-        .arg("/workspace/cli-daemon")
-        .arg("--browser")
-        .arg("https://runner-cli-daemon.nexum.local")
-        .arg("--upstream")
-        .arg("127.0.0.1:4740")
-        .arg("--routing-socket")
-        .arg(&socket)
-        .arg("--tls-dir")
-        .arg(&tls_dir)
-        .arg("--events-db")
-        .arg(&events_db)
-        .output()
-        .unwrap();
-    assert!(out.status.success());
-
-    let resolve = Command::new(nexumctl)
-        .arg("routing")
-        .arg("resolve")
-        .arg("--socket")
-        .arg(&socket)
-        .arg("--domain")
-        .arg("runner-cli-daemon.nexum.local")
-        .output()
-        .unwrap();
-    assert!(resolve.status.success());
-    let resolved: Value = serde_json::from_slice(&resolve.stdout).unwrap();
-    assert_eq!(resolved["kind"], Value::String("resolved".into()));
-    assert_eq!(
-        resolved["route"]["upstream"],
-        Value::String("127.0.0.1:4740".into())
-    );
-
-    daemon.kill().unwrap();
-    let _ = daemon.wait();
 }

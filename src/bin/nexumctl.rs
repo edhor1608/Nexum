@@ -156,8 +156,8 @@ fn parity_command(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn parity_compare(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
-    let primary_json = required_arg(args, "--primary-json")?;
-    let candidate_json = required_arg(args, "--candidate-json")?;
+    let primary_json = arg_or_file(args, "--primary-json", "--primary-file")?;
+    let candidate_json = arg_or_file(args, "--candidate-json", "--candidate-file")?;
 
     let primary: ExecutionResult = serde_json::from_str(&primary_json)?;
     let candidate: ExecutionResult = serde_json::from_str(&candidate_json)?;
@@ -305,9 +305,11 @@ fn tls_command(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
 fn tls_ensure(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let dir = PathBuf::from(required_arg(args, "--dir")?);
     let domain = required_arg(args, "--domain")?;
-    let validity_days = optional_arg(args, "--validity-days")
-        .unwrap_or_else(|| "30".to_string())
-        .parse::<u64>()?;
+    let validity_days = if args.iter().any(|arg| arg == "--validity-days") {
+        required_arg(args, "--validity-days")?.parse::<u64>()?
+    } else {
+        30
+    };
 
     let record = ensure_self_signed_cert(&dir, &domain, validity_days)?;
     println!("{}", serde_json::to_string(&record)?);
@@ -359,7 +361,7 @@ fn cutover_apply(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     });
 
     let mut flags = CutoverFlags::load_or_default(&file)?;
-    apply_cutover(&mut flags, &decision, capability);
+    apply_cutover(&mut flags, &decision);
     flags.save(&file)?;
 
     println!("{}", serde_json::to_string(&decision)?);
@@ -393,7 +395,6 @@ fn run_restore(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
         editor_target: required_arg(args, "--editor")?,
         browser_url: required_arg(args, "--browser")?,
         route_upstream: required_arg(args, "--upstream")?,
-        routing_socket: optional_arg(args, "--routing-socket").map(PathBuf::from),
         tls_dir: PathBuf::from(required_arg(args, "--tls-dir")?),
         events_db: PathBuf::from(required_arg(args, "--events-db")?),
     })?;
@@ -410,6 +411,9 @@ fn required_arg(args: &[String], key: &str) -> Result<String, Box<dyn std::error
     let value = args
         .get(pos + 1)
         .ok_or_else(|| format!("missing value for {key}"))?;
+    if value.starts_with('-') {
+        return Err(format!("missing value for {key}").into());
+    }
     Ok(value.to_string())
 }
 
@@ -418,6 +422,17 @@ fn optional_arg(args: &[String], key: &str) -> Option<String> {
         .position(|arg| arg == key)
         .and_then(|pos| args.get(pos + 1))
         .map(ToString::to_string)
+}
+
+fn arg_or_file(
+    args: &[String],
+    json_key: &str,
+    file_key: &str,
+) -> Result<String, Box<dyn std::error::Error>> {
+    if let Some(path) = optional_arg(args, file_key) {
+        return Ok(std::fs::read_to_string(path)?);
+    }
+    required_arg(args, json_key)
 }
 
 fn parse_mode(input: &str) -> Result<CapsuleMode, Box<dyn std::error::Error>> {
@@ -461,7 +476,9 @@ fn usage() {
         "nexumctl flags set --file <path> [--shadow true|false] [--routing true|false] [--restore true|false] [--attention true|false]"
     );
     eprintln!("nexumctl flags show --file <path>");
-    eprintln!("nexumctl parity compare --primary-json <json> --candidate-json <json>");
+    eprintln!(
+        "nexumctl parity compare (--primary-json <json> | --primary-file <path>) (--candidate-json <json> | --candidate-file <path>)"
+    );
     eprintln!("nexumctl routing health [--socket <path>]");
     eprintln!(
         "nexumctl routing register --capsule-id <id> --domain <domain> --upstream <host:port> [--socket <path>]"
@@ -478,6 +495,6 @@ fn usage() {
         "nexumctl cutover apply --file <path> --capability <routing|restore|attention> --parity-score <f64> --min-parity-score <f64> --critical-events <u32> --max-critical-events <u32> --shadow-mode <true|false>"
     );
     eprintln!(
-        "nexumctl run restore --capsule-id <id> --name <name> --workspace <n> --signal <needs_decision|critical_failure|passive_completion> --terminal <cmd> --editor <path> --browser <url> --upstream <host:port> [--routing-socket <path>] --tls-dir <path> --events-db <path>"
+        "nexumctl run restore --capsule-id <id> --name <name> --workspace <n> --signal <needs_decision|critical_failure|passive_completion> --terminal <cmd> --editor <path> --browser <url> --upstream <host:port> --tls-dir <path> --events-db <path>"
     );
 }

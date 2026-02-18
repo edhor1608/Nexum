@@ -34,7 +34,13 @@ pub fn evaluate_cutover(input: &CutoverInput) -> CutoverDecision {
     if !input.shadow_mode_enabled {
         reasons.push("shadow_mode must be enabled".to_string());
     }
-    if input.parity_score < input.min_parity_score {
+    if !input.parity_score.is_finite() || !input.min_parity_score.is_finite() {
+        reasons.push("parity values must be finite".to_string());
+    } else if !(0.0..=1.0).contains(&input.parity_score)
+        || !(0.0..=1.0).contains(&input.min_parity_score)
+    {
+        reasons.push("parity values must be between 0 and 1".to_string());
+    } else if input.parity_score < input.min_parity_score {
         reasons.push(format!(
             "parity below threshold: {} < {}",
             input.parity_score, input.min_parity_score
@@ -62,12 +68,12 @@ pub fn evaluate_cutover(input: &CutoverInput) -> CutoverDecision {
     }
 }
 
-pub fn apply_cutover(flags: &mut CutoverFlags, decision: &CutoverDecision, capability: Capability) {
+pub fn apply_cutover(flags: &mut CutoverFlags, decision: &CutoverDecision) {
     if !decision.allowed {
         return;
     }
 
-    match capability {
+    match decision.capability {
         Capability::Routing => flags.set(FlagName::RoutingControlPlane, true),
         Capability::Restore => flags.set(FlagName::RestoreControlPlane, true),
         Capability::Attention => flags.set(FlagName::AttentionControlPlane, true),

@@ -31,7 +31,7 @@ fn applies_allowed_cutover_to_flags() {
     });
 
     let mut flags = CutoverFlags::default();
-    apply_cutover(&mut flags, &decision, Capability::Routing);
+    apply_cutover(&mut flags, &decision);
 
     assert!(flags.routing_control_plane);
     assert!(!flags.restore_control_plane);

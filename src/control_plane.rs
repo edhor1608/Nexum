@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    attention::{AttentionEvent, AttentionPolicy},
+    attention::{AttentionChannel, AttentionEvent, AttentionPolicy, AttentionPriority},
     restore::{RestoreRequest, RestoreStep, SignalType, build_restore_plan},
     shell::{NiriShellCommand, build_niri_shell_plan},
 };
@@ -68,8 +68,8 @@ pub fn build_execution_plan(request: &RestoreRequest) -> ExecutionPlan {
     }
 
     steps.push(ExecutionStep::EmitAttention {
-        priority: to_priority_label(request.signal),
-        channel: to_channel_label(request.signal),
+        priority: to_priority_label(attention.priority),
+        channel: to_channel_label(attention.channel),
         requires_ack: attention.requires_ack,
         summary: attention.summary,
     });
@@ -89,18 +89,18 @@ fn summarize_signal(signal: SignalType) -> String {
     }
 }
 
-fn to_priority_label(signal: SignalType) -> String {
-    match signal {
-        SignalType::CriticalFailure => "blocking".to_string(),
-        SignalType::NeedsDecision => "active".to_string(),
-        SignalType::PassiveCompletion => "passive".to_string(),
+fn to_priority_label(priority: AttentionPriority) -> String {
+    match priority {
+        AttentionPriority::Blocking => "blocking".to_string(),
+        AttentionPriority::Active => "active".to_string(),
+        AttentionPriority::Passive => "passive".to_string(),
     }
 }
 
-fn to_channel_label(signal: SignalType) -> String {
-    match signal {
-        SignalType::CriticalFailure => "banner_and_sound".to_string(),
-        SignalType::NeedsDecision => "banner".to_string(),
-        SignalType::PassiveCompletion => "feed".to_string(),
+fn to_channel_label(channel: AttentionChannel) -> String {
+    match channel {
+        AttentionChannel::BannerAndSound => "banner_and_sound".to_string(),
+        AttentionChannel::Banner => "banner".to_string(),
+        AttentionChannel::Feed => "feed".to_string(),
     }
 }

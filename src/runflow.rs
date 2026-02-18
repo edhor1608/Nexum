@@ -10,7 +10,7 @@ use crate::{
     capsule::{Capsule, CapsuleMode},
     events::{EventError, EventStore, RuntimeEvent},
     restore::{RestoreRequest, RestoreSurfaces, SignalType, build_restore_plan},
-    routing::{RouteCommand, RouteOutcome, RouterState, send_command},
+    routing::{RouteCommand, RouteOutcome, RouterState},
     shell::{build_niri_shell_plan, render_shell_script},
     tls::{TlsError, ensure_self_signed_cert},
 };
@@ -25,7 +25,6 @@ pub struct RestoreRunInput {
     pub editor_target: String,
     pub browser_url: String,
     pub route_upstream: String,
-    pub routing_socket: Option<PathBuf>,
     pub tls_dir: PathBuf,
     pub events_db: PathBuf,
 }
@@ -48,6 +47,8 @@ pub enum RunFlowError {
     Events(#[from] EventError),
     #[error("routing failed: {0}")]
     Routing(String),
+    #[error("time: {0}")]
+    Time(#[from] std::time::SystemTimeError),
 }
 
 pub fn run_restore_flow(input: RestoreRunInput) -> Result<RestoreRunSummary, RunFlowError> {
@@ -60,11 +61,11 @@ pub fn run_restore_flow(input: RestoreRunInput) -> Result<RestoreRunSummary, Run
 
     let request = RestoreRequest {
         capsule: capsule.clone(),
-        signal: input.signal.clone(),
+        signal: input.signal,
         surfaces: RestoreSurfaces {
-            terminal_cmd: input.terminal_cmd.clone(),
-            editor_target: input.editor_target.clone(),
-            browser_url: input.browser_url.clone(),
+            terminal_cmd: input.terminal_cmd,
+            editor_target: input.editor_target,
+            browser_url: input.browser_url,
         },
     };
 
@@ -72,32 +73,46 @@ pub fn run_restore_flow(input: RestoreRunInput) -> Result<RestoreRunSummary, Run
 
     let tls = ensure_self_signed_cert(&input.tls_dir, &capsule.domain(), 30)?;
 
-    ensure_route(&capsule, &input)?;
+    let mut router = RouterState::default();
+    let route = router.handle(RouteCommand::Register {
+        capsule_id: capsule.capsule_id.clone(),
+        domain: capsule.domain(),
+        upstream: input.route_upstream,
+    });
+    if let RouteOutcome::Error { message, .. } = route {
+        return Err(RunFlowError::Routing(message));
+    }
 
     let shell_script = render_shell_script(&build_niri_shell_plan(&restore));
 
     let mut events = EventStore::open(&input.events_db)?;
-    events.append(RuntimeEvent {
-        capsule_id: capsule.capsule_id.clone(),
-        component: "runflow".into(),
-        level: "info".into(),
-        message: "restore start".into(),
-        ts_unix_ms: now_unix_ms(),
-    })?;
-    events.append(RuntimeEvent {
-        capsule_id: capsule.capsule_id.clone(),
-        component: "routing".into(),
-        level: "info".into(),
-        message: format!("route ensured for {}", capsule.domain()),
-        ts_unix_ms: now_unix_ms(),
-    })?;
-    events.append(RuntimeEvent {
-        capsule_id: capsule.capsule_id.clone(),
-        component: "runflow".into(),
-        level: "info".into(),
-        message: "restore plan ready".into(),
-        ts_unix_ms: now_unix_ms(),
-    })?;
+    let events_payloads = vec![
+        RuntimeEvent {
+            capsule_id: capsule.capsule_id.clone(),
+            component: "runflow".into(),
+            level: "info".into(),
+            message: "restore start".into(),
+            ts_unix_ms: now_unix_ms()?,
+        },
+        RuntimeEvent {
+            capsule_id: capsule.capsule_id.clone(),
+            component: "routing".into(),
+            level: "info".into(),
+            message: format!("route ensured for {}", capsule.domain()),
+            ts_unix_ms: now_unix_ms()?,
+        },
+        RuntimeEvent {
+            capsule_id: capsule.capsule_id.clone(),
+            component: "runflow".into(),
+            level: "info".into(),
+            message: "restore plan ready".into(),
+            ts_unix_ms: now_unix_ms()?,
+        },
+    ];
+    let events_written = events_payloads.len() as u32;
+    for event in events_payloads {
+        events.append(event)?;
+    }
 
     Ok(RestoreRunSummary {
         capsule_id: capsule.capsule_id.clone(),
@@ -105,56 +120,14 @@ pub fn run_restore_flow(input: RestoreRunInput) -> Result<RestoreRunSummary, Run
         target_budget_ms: restore.target_budget_ms,
         shell_script,
         tls_fingerprint_sha256: tls.fingerprint_sha256,
-        events_written: 3,
+        events_written,
     })
 }
 
-fn now_unix_ms() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("clock before epoch")
-        .as_millis() as u64
-}
-
-fn ensure_route(capsule: &Capsule, input: &RestoreRunInput) -> Result<(), RunFlowError> {
-    if let Some(socket) = &input.routing_socket {
-        let runtime = tokio::runtime::Builder::new_current_thread()
-            .enable_io()
-            .build()
-            .map_err(|error| RunFlowError::Routing(error.to_string()))?;
-
-        let outcome = runtime
-            .block_on(send_command(
-                socket,
-                RouteCommand::Register {
-                    capsule_id: capsule.capsule_id.clone(),
-                    domain: capsule.domain(),
-                    upstream: input.route_upstream.clone(),
-                },
-            ))
-            .map_err(|error| RunFlowError::Routing(error.to_string()))?;
-
-        return match outcome {
-            RouteOutcome::Registered { .. } => Ok(()),
-            RouteOutcome::Error { code, message } => {
-                Err(RunFlowError::Routing(format!("{code}: {message}")))
-            }
-            other => Err(RunFlowError::Routing(format!(
-                "unexpected daemon outcome: {:?}",
-                other
-            ))),
-        };
-    }
-
-    let mut router = RouterState::default();
-    let route = router.handle(RouteCommand::Register {
-        capsule_id: capsule.capsule_id.clone(),
-        domain: capsule.domain(),
-        upstream: input.route_upstream.clone(),
-    });
-    if let RouteOutcome::Error { message, .. } = route {
-        return Err(RunFlowError::Routing(message));
-    }
-
-    Ok(())
+fn now_unix_ms() -> Result<u64, std::time::SystemTimeError> {
+    Ok(
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)?
+            .as_millis() as u64,
+    )
 }
