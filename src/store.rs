@@ -99,15 +99,20 @@ fn row_to_capsule(row: &rusqlite::Row<'_>) -> rusqlite::Result<Capsule> {
         capsule_id: row.get(0)?,
         slug: row.get(1)?,
         display_name: row.get(2)?,
-        mode: parse_mode(&mode),
+        mode: parse_mode(&mode)?,
         workspace: row.get(4)?,
     })
 }
 
-fn parse_mode(value: &str) -> CapsuleMode {
+fn parse_mode(value: &str) -> rusqlite::Result<CapsuleMode> {
     match value {
-        "isolated_nix_shell" => CapsuleMode::IsolatedNixShell,
-        _ => CapsuleMode::HostDefault,
+        "host_default" => Ok(CapsuleMode::HostDefault),
+        "isolated_nix_shell" => Ok(CapsuleMode::IsolatedNixShell),
+        _ => Err(rusqlite::Error::FromSqlConversionFailure(
+            3,
+            rusqlite::types::Type::Text,
+            format!("invalid mode: {value}").into(),
+        )),
     }
 }
 
