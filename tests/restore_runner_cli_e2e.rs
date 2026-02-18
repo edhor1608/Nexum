@@ -3,6 +3,16 @@ use std::{process::Command, time::Duration};
 use serde_json::Value;
 use tempfile::tempdir;
 
+fn wait_for_socket(socket: &std::path::Path) {
+    for _ in 0..40 {
+        if socket.exists() {
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(25));
+    }
+    panic!("daemon socket not ready: {}", socket.display());
+}
+
 #[test]
 fn nexumctl_run_restore_executes_end_to_end_plan() {
     let dir = tempdir().unwrap();
@@ -64,12 +74,7 @@ fn nexumctl_run_restore_registers_route_via_daemon_socket() {
         .spawn()
         .unwrap();
 
-    for _ in 0..40 {
-        if socket.exists() {
-            break;
-        }
-        std::thread::sleep(Duration::from_millis(25));
-    }
+    wait_for_socket(&socket);
 
     let nexumctl = assert_cmd::cargo::cargo_bin!("nexumctl");
     let out = Command::new(nexumctl)

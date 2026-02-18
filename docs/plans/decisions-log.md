@@ -119,7 +119,7 @@ Consequences:
 
 ## ADR-IMPL-010
 Context:
-- `nexumd` daemon protocol existed, but operators lacked a first-class CLI interface to exercise and verify it.
+- `nexumd` daemon protocol existed, but operators lacked a first-class CLI to exercise and verify it.
 
 Decision:
 - Add `nexumctl routing` subcommands that call daemon socket API (`health/register/resolve/remove/list`) and return JSON outcomes.
