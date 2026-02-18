@@ -78,12 +78,7 @@ pub fn normalize_slug(input: &str) -> String {
         }
     }
 
-    while slug.starts_with('-') {
-        slug.remove(0);
-    }
-    while slug.ends_with('-') {
-        slug.pop();
-    }
+    slug = slug.trim_matches('-').to_string();
 
     if slug.is_empty() {
         return "capsule".to_string();
