@@ -305,3 +305,13 @@
 
 ## New Test Coverage (Milestone 32)
 - Stead CLI e2e validating mixed batch outcomes with deterministic per-event result payloads.
+
+## Additional Work (Milestone 33)
+- Added `nexumctl stead validate-events` command to perform schema validation for Stead batch envelopes without executing restore side effects.
+- Validation output includes deterministic machine-readable summary:
+  - `valid`
+  - `event_count`
+  - sorted unique `capsule_ids`
+
+## New Test Coverage (Milestone 33)
+- Stead CLI e2e validating validation payload shape and expected capsule/event counts for a valid batch envelope.
