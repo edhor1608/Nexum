@@ -1,7 +1,7 @@
 use nexum::ports::PortAllocator;
 
 #[test]
-fn allocates_unique_ports_across_parallel_capsules() {
+fn allocates_unique_ports_across_multiple_capsules() {
     let mut allocator = PortAllocator::new(4300, 4310);
     allocator.reserve(4300);
     allocator.reserve(4301);
@@ -33,4 +33,17 @@ fn returns_none_when_range_is_exhausted() {
     assert_eq!(allocator.allocate("cap-a"), Some(7000));
     assert_eq!(allocator.allocate("cap-b"), Some(7001));
     assert_eq!(allocator.allocate("cap-c"), None);
+}
+
+#[test]
+#[should_panic(expected = "port range start must be <= end")]
+fn rejects_invalid_port_range_configuration() {
+    let _ = PortAllocator::new(7100, 7099);
+}
+
+#[test]
+#[should_panic(expected = "reserved port out of range")]
+fn rejects_reserving_out_of_range_port() {
+    let mut allocator = PortAllocator::new(7200, 7201);
+    allocator.reserve(7300);
 }
