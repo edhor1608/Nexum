@@ -506,3 +506,16 @@ Rationale:
 
 Consequences:
 - Public project overview now reflects the same architecture commitments enforced in ongoing milestone PRs.
+
+## ADR-IMPL-040
+Context:
+- Batch dispatch lacked a native "plan-only" mode for CI/supervisor preflight workflows that need per-event viability checks without any runtime mutation.
+
+Decision:
+- Add `--dry-run` to `stead dispatch-batch` to produce a normal report envelope while skipping restore execution and event writes.
+
+Rationale:
+- Supports safe control-plane-first rollout and automation gating by separating dispatch intent validation from execution side effects.
+
+Consequences:
+- Dispatch-batch now supports three operational modes: best-effort execute, strict preflight abort, and side-effect-free dry-run preview.

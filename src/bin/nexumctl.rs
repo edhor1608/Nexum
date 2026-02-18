@@ -807,6 +807,7 @@ struct SteadBatchResult {
 
 #[derive(Debug, Serialize)]
 struct SteadBatchReport {
+    dry_run: bool,
     processed: u32,
     succeeded: u32,
     failed: u32,
@@ -829,6 +830,10 @@ fn stead_dispatch_batch(args: &[String]) -> Result<(), Box<dyn std::error::Error
     let events = parse_dispatch_events(&required_arg(args, "--events-json")?)
         .map_err(|error| error.to_string())?;
     let attention_plan = build_stead_attention_plan(&events);
+    let dry_run = optional_arg(args, "--dry-run")
+        .map(|value| parse_bool(&value))
+        .transpose()?
+        .unwrap_or(false);
     let report_file = optional_arg(args, "--report-file").map(PathBuf::from);
     let fail_on_missing_capsules = optional_arg(args, "--fail-on-missing-capsules")
         .map(|value| parse_bool(&value))
@@ -854,38 +859,64 @@ fn stead_dispatch_batch(args: &[String]) -> Result<(), Box<dyn std::error::Error
     let mut failed = 0u32;
     let mut results = Vec::with_capacity(events.len());
 
-    for event in events {
-        let capsule_id = event.capsule_id.clone();
-        match dispatch_stead_event(
-            &capsule_db,
-            event,
-            terminal.clone(),
-            editor.clone(),
-            browser.clone(),
-            routing_socket.clone(),
-            tls_dir.clone(),
-            events_db.clone(),
-        ) {
-            Ok(_) => {
-                succeeded += 1;
-                results.push(SteadBatchResult {
-                    capsule_id,
-                    ok: true,
-                    error: None,
-                });
+    if dry_run {
+        let store = CapsuleStore::open(&capsule_db)?;
+        for event in events {
+            let capsule_id = event.capsule_id;
+            match store.get(&capsule_id)? {
+                Some(_) => {
+                    succeeded += 1;
+                    results.push(SteadBatchResult {
+                        capsule_id,
+                        ok: true,
+                        error: None,
+                    });
+                }
+                None => {
+                    failed += 1;
+                    results.push(SteadBatchResult {
+                        capsule_id: capsule_id.clone(),
+                        ok: false,
+                        error: Some(format!("unknown capsule: {capsule_id}")),
+                    });
+                }
             }
-            Err(error) => {
-                failed += 1;
-                results.push(SteadBatchResult {
-                    capsule_id,
-                    ok: false,
-                    error: Some(error.to_string()),
-                });
+        }
+    } else {
+        for event in events {
+            let capsule_id = event.capsule_id.clone();
+            match dispatch_stead_event(
+                &capsule_db,
+                event,
+                terminal.clone(),
+                editor.clone(),
+                browser.clone(),
+                routing_socket.clone(),
+                tls_dir.clone(),
+                events_db.clone(),
+            ) {
+                Ok(_) => {
+                    succeeded += 1;
+                    results.push(SteadBatchResult {
+                        capsule_id,
+                        ok: true,
+                        error: None,
+                    });
+                }
+                Err(error) => {
+                    failed += 1;
+                    results.push(SteadBatchResult {
+                        capsule_id,
+                        ok: false,
+                        error: Some(error.to_string()),
+                    });
+                }
             }
         }
     }
 
     let report = SteadBatchReport {
+        dry_run,
         processed: (succeeded + failed),
         succeeded,
         failed,
@@ -1281,7 +1312,7 @@ fn usage() {
         "nexumctl stead dispatch --capsule-db <path> --event-json <json> [--terminal <cmd>] [--editor <path>] [--browser <url>] [--routing-socket <path>] --tls-dir <path> --events-db <path>"
     );
     eprintln!(
-        "nexumctl stead dispatch-batch --capsule-db <path> --events-json <json-array> [--terminal <cmd>] [--editor <path>] [--browser <url>] [--routing-socket <path>] [--fail-on-missing-capsules <bool>] [--report-file <path>] --tls-dir <path> --events-db <path>"
+        "nexumctl stead dispatch-batch --capsule-db <path> --events-json <json-array> [--terminal <cmd>] [--editor <path>] [--browser <url>] [--routing-socket <path>] [--dry-run <bool>] [--fail-on-missing-capsules <bool>] [--report-file <path>] --tls-dir <path> --events-db <path>"
     );
     eprintln!("nexumctl stead validate-events --events-json <json-array> [--capsule-db <path>]");
     eprintln!("nexumctl stead attention-plan --events-json <json-array>");

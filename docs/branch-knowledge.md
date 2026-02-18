@@ -373,3 +373,12 @@
   - D-002: niri-centric shell with deep Stead integration
   - D-005: OS control-plane-first Stead integration
 - Updated project status section in `README.md` from planning-only wording to active implementation status.
+
+## Additional Work (Milestone 40)
+- Added side-effect-free execution preview mode to Stead batch ingress:
+  - `nexumctl stead dispatch-batch --dry-run <bool>`
+- Dry-run now evaluates per-event capsule resolvability and returns normal batch report shape without running restore flow.
+- Dry-run path guarantees no runtime event writes or restore/routing side effects.
+
+## New Test Coverage (Milestone 40)
+- Stead CLI e2e validating dry-run report semantics and zero event-store side effects for mixed known/unknown capsule batches.
