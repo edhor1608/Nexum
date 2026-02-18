@@ -40,6 +40,7 @@ Consequences:
 - Need migration scripts/schema versioning for future store evolution.
 
 ## ADR-IMPL-004
+
 Context:
 - D-002 moved to deep niri-centric integration, requiring explicit shell-level planning semantics.
 
@@ -53,6 +54,7 @@ Consequences:
 - Command contract stability now matters for future niri adapter implementation.
 
 ## ADR-IMPL-005
+
 Context:
 - D-008 reframed to internal capability cutovers with shadow validation.
 

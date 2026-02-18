@@ -145,8 +145,8 @@ fn parity_command(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn parity_compare(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
-    let primary_json = required_arg(args, "--primary-json")?;
-    let candidate_json = required_arg(args, "--candidate-json")?;
+    let primary_json = arg_or_file(args, "--primary-json", "--primary-file")?;
+    let candidate_json = arg_or_file(args, "--candidate-json", "--candidate-file")?;
 
     let primary: ExecutionResult = serde_json::from_str(&primary_json)?;
     let candidate: ExecutionResult = serde_json::from_str(&candidate_json)?;
@@ -172,6 +172,17 @@ fn optional_arg(args: &[String], key: &str) -> Option<String> {
         .position(|arg| arg == key)
         .and_then(|pos| args.get(pos + 1))
         .map(ToString::to_string)
+}
+
+fn arg_or_file(
+    args: &[String],
+    json_key: &str,
+    file_key: &str,
+) -> Result<String, Box<dyn std::error::Error>> {
+    if let Some(path) = optional_arg(args, file_key) {
+        return Ok(std::fs::read_to_string(path)?);
+    }
+    required_arg(args, json_key)
 }
 
 fn parse_mode(input: &str) -> Result<CapsuleMode, Box<dyn std::error::Error>> {
@@ -206,5 +217,7 @@ fn usage() {
         "nexumctl flags set --file <path> [--shadow true|false] [--routing true|false] [--restore true|false] [--attention true|false]"
     );
     eprintln!("nexumctl flags show --file <path>");
-    eprintln!("nexumctl parity compare --primary-json <json> --candidate-json <json>");
+    eprintln!(
+        "nexumctl parity compare (--primary-json <json> | --primary-file <path>) (--candidate-json <json> | --candidate-file <path>)"
+    );
 }
