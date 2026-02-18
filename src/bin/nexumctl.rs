@@ -829,6 +829,7 @@ fn stead_dispatch_batch(args: &[String]) -> Result<(), Box<dyn std::error::Error
     let events = parse_dispatch_events(&required_arg(args, "--events-json")?)
         .map_err(|error| error.to_string())?;
     let attention_plan = build_stead_attention_plan(&events);
+    let report_file = optional_arg(args, "--report-file").map(PathBuf::from);
     let fail_on_missing_capsules = optional_arg(args, "--fail-on-missing-capsules")
         .map(|value| parse_bool(&value))
         .transpose()?
@@ -891,7 +892,11 @@ fn stead_dispatch_batch(args: &[String]) -> Result<(), Box<dyn std::error::Error
         attention_plan,
         results,
     };
-    println!("{}", serde_json::to_string(&report)?);
+    let payload = serde_json::to_string(&report)?;
+    if let Some(report_file) = report_file {
+        write_output_file(&report_file, &payload)?;
+    }
+    println!("{payload}");
     Ok(())
 }
 
@@ -1208,6 +1213,14 @@ fn parse_mode(input: &str) -> Result<CapsuleMode, Box<dyn std::error::Error>> {
     }
 }
 
+fn write_output_file(path: &PathBuf, payload: &str) -> Result<(), Box<dyn std::error::Error>> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(path, payload)?;
+    Ok(())
+}
+
 fn parse_bool(input: &str) -> Result<bool, Box<dyn std::error::Error>> {
     match input {
         "true" => Ok(true),
@@ -1268,7 +1281,7 @@ fn usage() {
         "nexumctl stead dispatch --capsule-db <path> --event-json <json> [--terminal <cmd>] [--editor <path>] [--browser <url>] [--routing-socket <path>] --tls-dir <path> --events-db <path>"
     );
     eprintln!(
-        "nexumctl stead dispatch-batch --capsule-db <path> --events-json <json-array> [--terminal <cmd>] [--editor <path>] [--browser <url>] [--routing-socket <path>] [--fail-on-missing-capsules <bool>] --tls-dir <path> --events-db <path>"
+        "nexumctl stead dispatch-batch --capsule-db <path> --events-json <json-array> [--terminal <cmd>] [--editor <path>] [--browser <url>] [--routing-socket <path>] [--fail-on-missing-capsules <bool>] [--report-file <path>] --tls-dir <path> --events-db <path>"
     );
     eprintln!("nexumctl stead validate-events --events-json <json-array> [--capsule-db <path>]");
     eprintln!("nexumctl stead attention-plan --events-json <json-array>");

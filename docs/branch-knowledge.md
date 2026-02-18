@@ -357,3 +357,12 @@
 
 ## New Test Coverage (Milestone 37)
 - Stead CLI e2e now validates dispatch-batch attention summary counters and focus capsule selection in mixed-success batches.
+
+## Additional Work (Milestone 38)
+- Added optional batch artifact output for automation workflows:
+  - `nexumctl stead dispatch-batch --report-file <path>`
+- Dispatch-batch now writes its JSON payload to disk (and stdout) for deterministic supervisor/CI handoff.
+- Report-file writer ensures parent directories exist before persisting payload.
+
+## New Test Coverage (Milestone 38)
+- Stead CLI e2e validating report-file creation and byte-equivalent JSON payload parity between stdout and saved artifact.

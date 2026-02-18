@@ -168,6 +168,60 @@ fn nexumctl_stead_dispatch_batch_reports_per_event_results() {
 }
 
 #[test]
+fn nexumctl_stead_dispatch_batch_writes_report_file() {
+    let dir = tempdir().unwrap();
+    let capsule_db = dir.path().join("capsules.sqlite3");
+    let tls_dir = dir.path().join("tls");
+    let events_db = dir.path().join("events.sqlite3");
+    let report_file = dir.path().join("batch-report.json");
+    let nexumctl = assert_cmd::cargo::cargo_bin!("nexumctl");
+
+    let create = Command::new(nexumctl)
+        .arg("capsule")
+        .arg("create")
+        .arg("--db")
+        .arg(&capsule_db)
+        .arg("--id")
+        .arg("cap-report")
+        .arg("--name")
+        .arg("Report Capsule")
+        .arg("--workspace")
+        .arg("23")
+        .arg("--mode")
+        .arg("host_default")
+        .arg("--repo-path")
+        .arg("/workspace/report")
+        .output()
+        .unwrap();
+    assert!(create.status.success());
+
+    let events = r#"[{"capsule_id":"cap-report","signal":"needs_decision","upstream":"127.0.0.1:4794"}]"#;
+    let out = Command::new(nexumctl)
+        .arg("stead")
+        .arg("dispatch-batch")
+        .arg("--capsule-db")
+        .arg(&capsule_db)
+        .arg("--events-json")
+        .arg(events)
+        .arg("--tls-dir")
+        .arg(&tls_dir)
+        .arg("--events-db")
+        .arg(&events_db)
+        .arg("--report-file")
+        .arg(&report_file)
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+
+    let stdout_payload: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(stdout_payload["processed"], Value::Number(1u64.into()));
+
+    let file_bytes = std::fs::read(&report_file).unwrap();
+    let file_payload: Value = serde_json::from_slice(&file_bytes).unwrap();
+    assert_eq!(file_payload, stdout_payload);
+}
+
+#[test]
 fn nexumctl_stead_dispatch_batch_fail_on_missing_capsules_aborts_without_side_effects() {
     let dir = tempdir().unwrap();
     let capsule_db = dir.path().join("capsules.sqlite3");

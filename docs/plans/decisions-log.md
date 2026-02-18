@@ -480,3 +480,16 @@ Rationale:
 
 Consequences:
 - Dispatch-batch contract now includes stable attention aggregate fields (`blocking`, `active`, `passive`, `requires_ack_count`, `focus_capsule_id`) with shared planning logic.
+
+## ADR-IMPL-038
+Context:
+- Batch dispatch outputs were only available on stdout, which made automation handoff and post-run artifact retention brittle in control-plane workflows.
+
+Decision:
+- Add optional `--report-file` output path to `stead dispatch-batch` to persist the exact JSON response payload.
+
+Rationale:
+- Improves supervisor/CI integration by producing stable, file-based artifacts without requiring shell redirection or wrapper scripts.
+
+Consequences:
+- Dispatch-batch now supports dual output channels (stdout + optional file) with deterministic payload parity.
