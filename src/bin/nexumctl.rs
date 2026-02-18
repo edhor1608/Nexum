@@ -87,6 +87,9 @@ fn required_arg(args: &[String], key: &str) -> Result<String, Box<dyn std::error
     let value = args
         .get(pos + 1)
         .ok_or_else(|| format!("missing value for {key}"))?;
+    if value.starts_with('-') {
+        return Err(format!("missing value for {key}").into());
+    }
     Ok(value.to_string())
 }
 

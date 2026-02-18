@@ -1,6 +1,7 @@
 # Decisions Log
 
 ## ADR-IMPL-001
+
 Context:
 - Needed a first runnable control-plane slice with enforceable behavior contracts.
 
@@ -14,6 +15,7 @@ Consequences:
 - Requires Rust toolchain as primary dev dependency for this repo.
 
 ## ADR-IMPL-002
+
 Context:
 - Routing daemon needed local control surface aligned with locked architecture.
 
@@ -27,6 +29,7 @@ Consequences:
 - Schema versioning discipline needed as protocol evolves.
 
 ## ADR-IMPL-003
+
 Context:
 - Capsule identity and migration controls require durable local storage and reversible toggles.
 
