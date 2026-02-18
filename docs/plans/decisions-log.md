@@ -519,3 +519,16 @@ Rationale:
 
 Consequences:
 - Dispatch-batch now supports three operational modes: best-effort execute, strict preflight abort, and side-effect-free dry-run preview.
+
+## ADR-IMPL-041
+Context:
+- `stead dispatch-batch` response schema expanded rapidly (attention summary, report artifacts, dry-run), increasing integration drift risk for automation consumers.
+
+Decision:
+- Add snapshot contract test for dispatch-batch report payload shape using deterministic dry-run inputs.
+
+Rationale:
+- Enforces review-visible schema evolution for control-plane integrations and keeps response compatibility explicit.
+
+Consequences:
+- Batch report payload changes now require explicit snapshot updates, reducing accidental contract drift.

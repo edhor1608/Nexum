@@ -382,3 +382,15 @@
 
 ## New Test Coverage (Milestone 40)
 - Stead CLI e2e validating dry-run report semantics and zero event-store side effects for mixed known/unknown capsule batches.
+
+## Additional Work (Milestone 41)
+- Added snapshot contract coverage for Stead batch dispatch report payload.
+- Locked schema for `stead dispatch-batch` (dry-run path) including:
+  - aggregate execution counters
+  - `dry_run` mode flag
+  - embedded `attention_plan`
+  - per-event result records
+
+## New Test Coverage (Milestone 41)
+- Snapshot test for dispatch-batch response contract:
+  - `tests/snapshots/stead_snapshots__stead_dispatch_batch_report_contract.snap`
