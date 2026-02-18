@@ -1,7 +1,7 @@
 use nexum::ports::PortAllocator;
 
 #[test]
-fn allocates_unique_ports_across_parallel_capsules() {
+fn allocates_unique_ports_across_multiple_capsules() {
     let mut allocator = PortAllocator::new(4300, 4310);
     allocator.reserve(4300);
     allocator.reserve(4301);
