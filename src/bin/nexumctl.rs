@@ -438,8 +438,8 @@ fn events_list(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn parity_compare(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
-    let primary_json = arg_or_file(args, "--primary-json", "--primary-file")?;
-    let candidate_json = arg_or_file(args, "--candidate-json", "--candidate-file")?;
+    let primary_json = required_arg(args, "--primary-json")?;
+    let candidate_json = required_arg(args, "--candidate-json")?;
 
     let primary: ExecutionResult = serde_json::from_str(&primary_json)?;
     let candidate: ExecutionResult = serde_json::from_str(&candidate_json)?;
@@ -587,11 +587,9 @@ fn tls_command(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
 fn tls_ensure(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let dir = PathBuf::from(required_arg(args, "--dir")?);
     let domain = required_arg(args, "--domain")?;
-    let validity_days = if args.iter().any(|arg| arg == "--validity-days") {
-        required_arg(args, "--validity-days")?.parse::<u64>()?
-    } else {
-        30
-    };
+    let validity_days = optional_arg(args, "--validity-days")
+        .unwrap_or_else(|| "30".to_string())
+        .parse::<u64>()?;
 
     let record = ensure_self_signed_cert(&dir, &domain, validity_days)?;
     println!("{}", serde_json::to_string(&record)?);
@@ -646,7 +644,7 @@ fn cutover_apply(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     });
 
     let mut flags = CutoverFlags::load_or_default(&file)?;
-    apply_cutover(&mut flags, &decision);
+    apply_cutover(&mut flags, &decision, capability);
     flags.save(&file)?;
 
     println!("{}", serde_json::to_string(&decision)?);
@@ -677,7 +675,7 @@ fn cutover_apply_from_events(args: &[String]) -> Result<(), Box<dyn std::error::
     });
 
     let mut flags = CutoverFlags::load_or_default(&file)?;
-    apply_cutover(&mut flags, &decision);
+    apply_cutover(&mut flags, &decision, capability);
     flags.save(&file)?;
 
     println!("{}", serde_json::to_string(&decision)?);
@@ -707,7 +705,7 @@ fn cutover_apply_from_summary(args: &[String]) -> Result<(), Box<dyn std::error:
     });
 
     let mut flags = CutoverFlags::load_or_default(&file)?;
-    apply_cutover(&mut flags, &decision);
+    apply_cutover(&mut flags, &decision, capability);
     flags.save(&file)?;
 
     println!("{}", serde_json::to_string(&decision)?);
@@ -771,6 +769,7 @@ fn stead_command(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     match args[0].as_str() {
         "dispatch" => stead_dispatch(&args[1..]),
         "dispatch-batch" => stead_dispatch_batch(&args[1..]),
+        "validate-events" => stead_validate_events(&args[1..]),
         _ => {
             usage();
             std::process::exit(2);
@@ -927,6 +926,42 @@ fn dispatch_stead_event(
     .map_err(|error| -> Box<dyn std::error::Error> { Box::new(error) })
 }
 
+fn stead_validate_events(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let events = parse_dispatch_events(&required_arg(args, "--events-json")?)
+        .map_err(|error| error.to_string())?;
+    let capsule_db = optional_arg(args, "--capsule-db").map(PathBuf::from);
+    let event_count = events.len();
+
+    let mut capsule_ids = events
+        .iter()
+        .map(|event| event.capsule_id.clone())
+        .collect::<Vec<_>>();
+    capsule_ids.sort();
+    capsule_ids.dedup();
+
+    let mut missing_capsule_ids = Vec::new();
+    if let Some(capsule_db) = capsule_db {
+        let store = CapsuleStore::open(&capsule_db)?;
+        for capsule_id in &capsule_ids {
+            if store.get(capsule_id)?.is_none() {
+                missing_capsule_ids.push(capsule_id.clone());
+            }
+        }
+    }
+    let valid = missing_capsule_ids.is_empty();
+
+    println!(
+        "{}",
+        serde_json::to_string(&serde_json::json!({
+            "valid": valid,
+            "event_count": event_count,
+            "capsule_ids": capsule_ids,
+            "missing_capsule_ids": missing_capsule_ids,
+        }))?
+    );
+    Ok(())
+}
+
 fn run_restore(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let signal = parse_signal(&required_arg(args, "--signal")?)?;
     let identity_collision = optional_arg(args, "--identity-collision")
@@ -1043,9 +1078,6 @@ fn required_arg(args: &[String], key: &str) -> Result<String, Box<dyn std::error
     let value = args
         .get(pos + 1)
         .ok_or_else(|| format!("missing value for {key}"))?;
-    if value.starts_with('-') {
-        return Err(format!("missing value for {key}").into());
-    }
     Ok(value.to_string())
 }
 
@@ -1054,17 +1086,6 @@ fn optional_arg(args: &[String], key: &str) -> Option<String> {
         .position(|arg| arg == key)
         .and_then(|pos| args.get(pos + 1))
         .map(ToString::to_string)
-}
-
-fn arg_or_file(
-    args: &[String],
-    json_key: &str,
-    file_key: &str,
-) -> Result<String, Box<dyn std::error::Error>> {
-    if let Some(path) = optional_arg(args, file_key) {
-        return Ok(std::fs::read_to_string(path)?);
-    }
-    required_arg(args, json_key)
 }
 
 fn parse_mode(input: &str) -> Result<CapsuleMode, Box<dyn std::error::Error>> {
@@ -1116,9 +1137,7 @@ fn usage() {
         "nexumctl flags set --file <path> [--shadow true|false] [--routing true|false] [--restore true|false] [--attention true|false]"
     );
     eprintln!("nexumctl flags show --file <path>");
-    eprintln!(
-        "nexumctl parity compare (--primary-json <json> | --primary-file <path>) (--candidate-json <json> | --candidate-file <path>)"
-    );
+    eprintln!("nexumctl parity compare --primary-json <json> --candidate-json <json>");
     eprintln!("nexumctl events summary --db <path>");
     eprintln!(
         "nexumctl events list --db <path> [--capsule-id <id>] [--level <level>] [--limit <n>]"
@@ -1139,6 +1158,7 @@ fn usage() {
     eprintln!(
         "nexumctl stead dispatch-batch --capsule-db <path> --events-json <json-array> [--terminal <cmd>] [--editor <path>] [--browser <url>] [--routing-socket <path>] --tls-dir <path> --events-db <path>"
     );
+    eprintln!("nexumctl stead validate-events --events-json <json-array> [--capsule-db <path>]");
     eprintln!(
         "nexumctl supervisor status --capsule-db <path> --events-db <path> --flags-file <path>"
     );

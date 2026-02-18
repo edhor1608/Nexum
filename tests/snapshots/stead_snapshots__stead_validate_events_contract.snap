@@ -1,0 +1,11 @@
+---
+source: tests/stead_snapshots.rs
+expression: payload
+---
+capsule_ids:
+  - cap-known
+  - cap-missing
+event_count: 2
+missing_capsule_ids:
+  - cap-missing
+valid: false

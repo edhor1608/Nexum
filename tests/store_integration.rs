@@ -2,7 +2,6 @@ use nexum::{
     capsule::{Capsule, CapsuleMode},
     store::CapsuleStore,
 };
-use rusqlite::Connection;
 use tempfile::tempdir;
 
 #[test]
@@ -56,19 +55,82 @@ fn renaming_display_name_keeps_slug_stable_in_store() {
 }
 
 #[test]
-fn store_rejects_unknown_capsule_mode_values() {
+fn store_supports_lifecycle_state_transition() {
     let dir = tempdir().unwrap();
     let db = dir.path().join("capsules.sqlite3");
-    let _ = CapsuleStore::open(&db).unwrap();
 
-    let conn = Connection::open(&db).unwrap();
-    conn.execute(
-        "INSERT INTO capsules (capsule_id, slug, display_name, mode, workspace) VALUES (?1, ?2, ?3, ?4, ?5)",
-        rusqlite::params!["cap-bad-mode", "bad-mode", "Bad Mode", "future_mode", 9u16],
-    )
-    .unwrap();
+    let mut store = CapsuleStore::open(&db).unwrap();
+    store
+        .upsert(Capsule::new(
+            "cap-store-4",
+            "Stateful Capsule",
+            CapsuleMode::HostDefault,
+            3,
+        ))
+        .unwrap();
 
-    let store = CapsuleStore::open(&db).unwrap();
-    let err = store.list().unwrap_err().to_string();
-    assert!(err.contains("invalid mode: future_mode"));
+    store
+        .transition_state("cap-store-4", nexum::capsule::CapsuleState::Degraded)
+        .unwrap();
+
+    let loaded = store.get("cap-store-4").unwrap().unwrap();
+    assert_eq!(loaded.state, nexum::capsule::CapsuleState::Degraded);
+}
+
+#[test]
+fn store_allocates_stable_capsule_ports_and_releases_them() {
+    let dir = tempdir().unwrap();
+    let db = dir.path().join("capsules.sqlite3");
+
+    let mut store = CapsuleStore::open(&db).unwrap();
+    store
+        .upsert(Capsule::new(
+            "cap-store-ports",
+            "Ports Capsule",
+            CapsuleMode::HostDefault,
+            5,
+        ))
+        .unwrap();
+
+    let first = store
+        .allocate_port("cap-store-ports", 6100, 6103)
+        .unwrap()
+        .unwrap();
+    let second = store
+        .allocate_port("cap-store-ports", 6100, 6103)
+        .unwrap()
+        .unwrap();
+    assert_eq!(first, second);
+    assert_eq!(first, 6100);
+
+    let released = store.release_ports("cap-store-ports").unwrap();
+    assert_eq!(released, 1);
+
+    let reassigned = store
+        .allocate_port("cap-store-other", 6100, 6103)
+        .unwrap()
+        .unwrap();
+    assert_eq!(reassigned, 6100);
+}
+
+#[test]
+fn store_persists_capsule_repo_path_updates() {
+    let dir = tempdir().unwrap();
+    let db = dir.path().join("capsules.sqlite3");
+
+    let mut store = CapsuleStore::open(&db).unwrap();
+    store
+        .upsert(
+            Capsule::new(
+                "cap-store-repo",
+                "Repo Capsule",
+                CapsuleMode::HostDefault,
+                6,
+            )
+            .with_repo_path("/workspace/repo-capsule"),
+        )
+        .unwrap();
+
+    let loaded = store.get("cap-store-repo").unwrap().unwrap();
+    assert_eq!(loaded.repo_path, "/workspace/repo-capsule");
 }

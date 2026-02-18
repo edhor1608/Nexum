@@ -1,8 +1,5 @@
 use serde::{Deserialize, Serialize};
 
-const DURATION_TOLERANCE_MS: u64 = 500;
-const TOTAL_CHECKS: u32 = 4;
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ExecutionResult {
     pub capsule_id: String,
@@ -21,10 +18,11 @@ pub struct ParityReport {
 
 pub fn compare_execution(primary: &ExecutionResult, candidate: &ExecutionResult) -> ParityReport {
     let mut mismatches = Vec::new();
-    let mut passed_checks: u32 = 0;
+    let mut passed_checks: f64 = 0.0;
+    let total_checks: f64 = 4.0;
 
     if primary.capsule_id == candidate.capsule_id {
-        passed_checks += 1;
+        passed_checks += 1.0;
     } else {
         mismatches.push(format!(
             "capsule_id mismatch: primary={}, candidate={}",
@@ -33,7 +31,7 @@ pub fn compare_execution(primary: &ExecutionResult, candidate: &ExecutionResult)
     }
 
     if primary.step_count == candidate.step_count {
-        passed_checks += 1;
+        passed_checks += 1.0;
     } else {
         mismatches.push(format!(
             "step_count mismatch: primary={}, candidate={}",
@@ -42,8 +40,8 @@ pub fn compare_execution(primary: &ExecutionResult, candidate: &ExecutionResult)
     }
 
     let duration_delta = primary.duration_ms.abs_diff(candidate.duration_ms);
-    if duration_delta <= DURATION_TOLERANCE_MS {
-        passed_checks += 1;
+    if duration_delta <= 500 {
+        passed_checks += 1.0;
     } else {
         mismatches.push(format!(
             "duration_ms mismatch: primary={}, candidate={}, delta={}",
@@ -52,7 +50,7 @@ pub fn compare_execution(primary: &ExecutionResult, candidate: &ExecutionResult)
     }
 
     if primary.attention_priority == candidate.attention_priority {
-        passed_checks += 1;
+        passed_checks += 1.0;
     } else {
         mismatches.push(format!(
             "attention_priority mismatch: primary={}, candidate={}",
@@ -60,7 +58,7 @@ pub fn compare_execution(primary: &ExecutionResult, candidate: &ExecutionResult)
         ));
     }
 
-    let parity_score = (passed_checks as f64 / TOTAL_CHECKS as f64 * 1000.0).round() / 1000.0;
+    let parity_score = (passed_checks / total_checks * 1000.0).round() / 1000.0;
 
     ParityReport {
         capsule_id: primary.capsule_id.clone(),

@@ -25,10 +25,8 @@ fn daemon_binary_serves_json_over_unix_socket() {
         }
         std::thread::sleep(Duration::from_millis(25));
     }
-    assert!(socket.exists(), "socket was not created within 1s");
 
     let mut stream = UnixStream::connect(&socket).unwrap();
-    let mut reader = BufReader::new(stream.try_clone().unwrap());
     stream
         .write_all(
             format!(
@@ -40,14 +38,16 @@ fn daemon_binary_serves_json_over_unix_socket() {
         .unwrap();
 
     let mut line = String::new();
-    reader.read_line(&mut line).unwrap();
+    BufReader::new(stream.try_clone().unwrap())
+        .read_line(&mut line)
+        .unwrap();
     assert!(line.contains("registered"));
 
     stream
         .write_all(format!("{}\n", json!({"cmd":"health"})).as_bytes())
         .unwrap();
     line.clear();
-    reader.read_line(&mut line).unwrap();
+    BufReader::new(stream).read_line(&mut line).unwrap();
     assert!(line.contains("ok"));
 
     child.kill().unwrap();

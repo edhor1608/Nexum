@@ -101,22 +101,18 @@ pub fn render_shell_script(plan: &NiriShellPlan) -> String {
         let line = match command {
             NiriShellCommand::FocusWorkspace(id) => format!("niri msg action focus-workspace {id}"),
             NiriShellCommand::SpawnTerminal(cmd) => {
-                format!("wezterm start -- bash -lc {}", shell_quote(cmd))
+                format!("wezterm start -- bash -lc '{}'", escape_single_quotes(cmd))
             }
-            NiriShellCommand::SpawnEditor(target) => format!("code {}", shell_quote(target)),
-            NiriShellCommand::SpawnBrowser(url) => format!("xdg-open {}", shell_quote(url)),
+            NiriShellCommand::SpawnEditor(target) => format!("code {target}"),
+            NiriShellCommand::SpawnBrowser(url) => format!("xdg-open {url}"),
             NiriShellCommand::RaiseAttention(level) => {
-                format!("notify-send 'Nexum Attention' {}", shell_quote(level))
+                format!("notify-send 'Nexum Attention' '{level}'")
             }
         };
         lines.push(line);
     }
 
     lines.join("\n")
-}
-
-fn shell_quote(input: &str) -> String {
-    format!("'{}'", escape_single_quotes(input))
 }
 
 fn escape_single_quotes(input: &str) -> String {

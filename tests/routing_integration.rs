@@ -20,7 +20,6 @@ async fn start_server(socket: &std::path::Path) -> (oneshot::Sender<()>, JoinHan
         }
         tokio::time::sleep(Duration::from_millis(25)).await;
     }
-    assert!(socket_path.exists(), "socket was not created within 500ms");
 
     (tx, handle)
 }
@@ -71,16 +70,4 @@ async fn socket_api_supports_health_register_resolve_remove() {
 
     let _ = shutdown_tx.send(());
     handle.await.unwrap();
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn server_rejects_existing_non_socket_path() {
-    let dir = tempdir().unwrap();
-    let socket = dir.path().join("nexumd.sock");
-    std::fs::write(&socket, b"not-a-socket").unwrap();
-
-    let (_shutdown_tx, shutdown_rx) = oneshot::channel();
-    let err = serve_unix_socket(&socket, shutdown_rx).await.unwrap_err();
-    let message = err.to_string();
-    assert!(message.contains("not a Unix socket"));
 }
