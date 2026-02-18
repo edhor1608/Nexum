@@ -1,7 +1,6 @@
 # Decisions Log
 
 ## ADR-IMPL-001
-
 Context:
 - Needed a first runnable control-plane slice with enforceable behavior contracts.
 
@@ -15,7 +14,6 @@ Consequences:
 - Requires Rust toolchain as primary dev dependency for this repo.
 
 ## ADR-IMPL-002
-
 Context:
 - Routing daemon needed local control surface aligned with locked architecture.
 
@@ -29,7 +27,6 @@ Consequences:
 - Schema versioning discipline needed as protocol evolves.
 
 ## ADR-IMPL-003
-
 Context:
 - Capsule identity and migration controls require durable local storage and reversible toggles.
 
@@ -43,7 +40,6 @@ Consequences:
 - Need migration scripts/schema versioning for future store evolution.
 
 ## ADR-IMPL-004
-
 Context:
 - D-002 moved to deep niri-centric integration, requiring explicit shell-level planning semantics.
 
@@ -57,7 +53,6 @@ Consequences:
 - Command contract stability now matters for future niri adapter implementation.
 
 ## ADR-IMPL-005
-
 Context:
 - D-008 reframed to internal capability cutovers with shadow validation.
 
@@ -69,3 +64,16 @@ Rationale:
 
 Consequences:
 - Requires operational policy thresholds for parity acceptance in later rollout phases.
+
+## ADR-IMPL-006
+Context:
+- Control-plane plans needed an explicit execution boundary to avoid coupling directly to process spawning and to prepare for real niri integration.
+
+Decision:
+- Introduce `NiriAdapter` trait with deterministic `execute_shell_plan` and script rendering surface.
+
+Rationale:
+- Enables testing of shell execution semantics independent of runtime adapter choice.
+
+Consequences:
+- Future niri runtime adapter can be added without changing restore/control-plane planning contracts.
