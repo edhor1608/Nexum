@@ -441,3 +441,16 @@ Rationale:
 
 Consequences:
 - Validation payload contract now includes store-aware capsule existence diagnostics and snapshot-locked schema coverage.
+
+## ADR-IMPL-035
+Context:
+- Batch dispatch supported per-event error reporting, but control-plane operators lacked a strict preflight mode to guarantee all capsules were resolvable before any side effects.
+
+Decision:
+- Add `--fail-on-missing-capsules` to `stead dispatch-batch` to abort the full batch when unknown capsule ids are present.
+
+Rationale:
+- Supports control-plane-first safety expectations (D-005 Option B) by enabling atomic preflight gating for Stead-driven batch restore workflows.
+
+Consequences:
+- Dispatch-batch now supports both best-effort replay and strict atomic preflight modes, with explicit no-side-effect behavior in strict abort paths.

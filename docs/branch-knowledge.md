@@ -326,3 +326,12 @@
 ## New Test Coverage (Milestone 34)
 - Stead CLI e2e validating unknown capsule detection and deduplicated missing-id reporting when `--capsule-db` is provided.
 - Snapshot contract test for `stead validate-events` payload shape (`tests/snapshots/stead_snapshots__stead_validate_events_contract.snap`).
+
+## Additional Work (Milestone 35)
+- Added strict preflight gating to `nexumctl stead dispatch-batch` via:
+  - `--fail-on-missing-capsules <bool>`
+- When enabled, batch dispatch aborts before any restore execution if unknown capsules are referenced.
+- Preflight shares the same deterministic capsule-id validation path used by `stead validate-events`.
+
+## New Test Coverage (Milestone 35)
+- Stead CLI e2e validating strict batch preflight failure path and asserting zero event-store side effects when aborted.

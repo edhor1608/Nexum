@@ -148,6 +148,66 @@ fn nexumctl_stead_dispatch_batch_reports_per_event_results() {
 }
 
 #[test]
+fn nexumctl_stead_dispatch_batch_fail_on_missing_capsules_aborts_without_side_effects() {
+    let dir = tempdir().unwrap();
+    let capsule_db = dir.path().join("capsules.sqlite3");
+    let tls_dir = dir.path().join("tls");
+    let events_db = dir.path().join("events.sqlite3");
+    let nexumctl = assert_cmd::cargo::cargo_bin!("nexumctl");
+
+    let create = Command::new(nexumctl)
+        .arg("capsule")
+        .arg("create")
+        .arg("--db")
+        .arg(&capsule_db)
+        .arg("--id")
+        .arg("cap-stead-batch-ok")
+        .arg("--name")
+        .arg("Stead Batch OK")
+        .arg("--workspace")
+        .arg("22")
+        .arg("--mode")
+        .arg("host_default")
+        .arg("--repo-path")
+        .arg("/workspace/stead-batch-ok")
+        .output()
+        .unwrap();
+    assert!(create.status.success());
+
+    let events = r#"[{"capsule_id":"cap-stead-batch-ok","signal":"needs_decision","upstream":"127.0.0.1:4792"},{"capsule_id":"cap-stead-batch-missing","signal":"needs_decision","upstream":"127.0.0.1:4793"}]"#;
+    let out = Command::new(nexumctl)
+        .arg("stead")
+        .arg("dispatch-batch")
+        .arg("--capsule-db")
+        .arg(&capsule_db)
+        .arg("--events-json")
+        .arg(events)
+        .arg("--tls-dir")
+        .arg(&tls_dir)
+        .arg("--events-db")
+        .arg(&events_db)
+        .arg("--fail-on-missing-capsules")
+        .arg("true")
+        .output()
+        .unwrap();
+    assert!(!out.status.success());
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("unknown capsules in batch"));
+    assert!(stderr.contains("cap-stead-batch-missing"));
+
+    let summary = Command::new(nexumctl)
+        .arg("events")
+        .arg("summary")
+        .arg("--db")
+        .arg(&events_db)
+        .output()
+        .unwrap();
+    assert!(summary.status.success());
+    let payload: Value = serde_json::from_slice(&summary.stdout).unwrap();
+    assert_eq!(payload["total_events"], Value::Number(0u64.into()));
+}
+
+#[test]
 fn nexumctl_stead_validate_events_reports_batch_shape() {
     let nexumctl = assert_cmd::cargo::cargo_bin!("nexumctl");
     let events = r#"[{"capsule_id":"cap-a","signal":"needs_decision","upstream":"127.0.0.1:4800"},{"capsule_id":"cap-b","signal":"critical_failure","upstream":"127.0.0.1:4801"}]"#;

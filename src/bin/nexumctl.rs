@@ -815,12 +815,25 @@ fn stead_dispatch_batch(args: &[String]) -> Result<(), Box<dyn std::error::Error
     let capsule_db = PathBuf::from(required_arg(args, "--capsule-db")?);
     let events = parse_dispatch_events(&required_arg(args, "--events-json")?)
         .map_err(|error| error.to_string())?;
+    let fail_on_missing_capsules = optional_arg(args, "--fail-on-missing-capsules")
+        .map(|value| parse_bool(&value))
+        .transpose()?
+        .unwrap_or(false);
     let terminal = optional_arg(args, "--terminal");
     let editor = optional_arg(args, "--editor");
     let browser = optional_arg(args, "--browser");
     let routing_socket = optional_arg(args, "--routing-socket").map(PathBuf::from);
     let tls_dir = PathBuf::from(required_arg(args, "--tls-dir")?);
     let events_db = PathBuf::from(required_arg(args, "--events-db")?);
+
+    if fail_on_missing_capsules {
+        let missing_capsule_ids = find_missing_capsule_ids(&capsule_db, &events)?;
+        if !missing_capsule_ids.is_empty() {
+            return Err(
+                format!("unknown capsules in batch: {}", missing_capsule_ids.join(", ")).into(),
+            );
+        }
+    }
 
     let mut succeeded = 0u32;
     let mut failed = 0u32;
@@ -865,6 +878,30 @@ fn stead_dispatch_batch(args: &[String]) -> Result<(), Box<dyn std::error::Error
     };
     println!("{}", serde_json::to_string(&report)?);
     Ok(())
+}
+
+fn collect_event_capsule_ids(events: &[DispatchEvent]) -> Vec<String> {
+    let mut capsule_ids = events
+        .iter()
+        .map(|event| event.capsule_id.clone())
+        .collect::<Vec<_>>();
+    capsule_ids.sort();
+    capsule_ids.dedup();
+    capsule_ids
+}
+
+fn find_missing_capsule_ids(
+    capsule_db: &PathBuf,
+    events: &[DispatchEvent],
+) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    let store = CapsuleStore::open(capsule_db)?;
+    let mut missing_capsule_ids = Vec::new();
+    for capsule_id in collect_event_capsule_ids(events) {
+        if store.get(&capsule_id)?.is_none() {
+            missing_capsule_ids.push(capsule_id);
+        }
+    }
+    Ok(missing_capsule_ids)
 }
 
 fn dispatch_stead_event(
@@ -932,21 +969,11 @@ fn stead_validate_events(args: &[String]) -> Result<(), Box<dyn std::error::Erro
     let capsule_db = optional_arg(args, "--capsule-db").map(PathBuf::from);
     let event_count = events.len();
 
-    let mut capsule_ids = events
-        .iter()
-        .map(|event| event.capsule_id.clone())
-        .collect::<Vec<_>>();
-    capsule_ids.sort();
-    capsule_ids.dedup();
+    let capsule_ids = collect_event_capsule_ids(&events);
 
     let mut missing_capsule_ids = Vec::new();
     if let Some(capsule_db) = capsule_db {
-        let store = CapsuleStore::open(&capsule_db)?;
-        for capsule_id in &capsule_ids {
-            if store.get(capsule_id)?.is_none() {
-                missing_capsule_ids.push(capsule_id.clone());
-            }
-        }
+        missing_capsule_ids = find_missing_capsule_ids(&capsule_db, &events)?;
     }
     let valid = missing_capsule_ids.is_empty();
 
@@ -1156,7 +1183,7 @@ fn usage() {
         "nexumctl stead dispatch --capsule-db <path> --event-json <json> [--terminal <cmd>] [--editor <path>] [--browser <url>] [--routing-socket <path>] --tls-dir <path> --events-db <path>"
     );
     eprintln!(
-        "nexumctl stead dispatch-batch --capsule-db <path> --events-json <json-array> [--terminal <cmd>] [--editor <path>] [--browser <url>] [--routing-socket <path>] --tls-dir <path> --events-db <path>"
+        "nexumctl stead dispatch-batch --capsule-db <path> --events-json <json-array> [--terminal <cmd>] [--editor <path>] [--browser <url>] [--routing-socket <path>] [--fail-on-missing-capsules <bool>] --tls-dir <path> --events-db <path>"
     );
     eprintln!("nexumctl stead validate-events --events-json <json-array> [--capsule-db <path>]");
     eprintln!(
