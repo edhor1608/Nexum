@@ -1,10 +1,9 @@
 ---
 source: tests/niri_adapter_snapshots.rs
-assertion_line: 17
 expression: script
 ---
 niri msg action focus-workspace 7
 wezterm start -- bash -lc 'cd /workspace/search && nix develop'
-code /workspace/search
-xdg-open https://search.nexum.local
+code '/workspace/search'
+xdg-open 'https://search.nexum.local'
 notify-send 'Nexum Attention' 'critical_failure'

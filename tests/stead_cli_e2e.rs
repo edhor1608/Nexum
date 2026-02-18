@@ -52,8 +52,8 @@ fn nexumctl_stead_dispatch_runs_restore_from_event_envelope() {
     assert_eq!(payload["capsule_id"], Value::String("cap-stead-1".into()));
     let script = payload["shell_script"].as_str().unwrap();
     assert!(script.contains("cd /workspace/stead && nix develop"));
-    assert!(script.contains("code /workspace/stead"));
-    assert!(script.contains("xdg-open https://stead-capsule.nexum.local"));
+    assert!(script.contains("code '/workspace/stead'"));
+    assert!(script.contains("xdg-open 'https://stead-capsule.nexum.local'"));
 }
 
 #[test]
