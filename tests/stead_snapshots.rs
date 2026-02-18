@@ -69,6 +69,7 @@ fn snapshot_stead_dispatch_batch_report_contract() {
     let tls_dir = dir.path().join("tls");
     let events_db = dir.path().join("events.sqlite3");
     let nexumctl = assert_cmd::cargo::cargo_bin!("nexumctl");
+    std::fs::create_dir_all(&tls_dir).unwrap();
 
     let create = Command::new(nexumctl)
         .arg("capsule")
