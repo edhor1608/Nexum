@@ -139,6 +139,26 @@ fn nexumctl_stead_dispatch_batch_reports_per_event_results() {
         Value::String("missing-cap".into())
     );
     assert_eq!(payload["results"][1]["ok"], Value::Bool(false));
+    assert_eq!(
+        payload["attention_plan"]["active"],
+        Value::Number(2u64.into())
+    );
+    assert_eq!(
+        payload["attention_plan"]["blocking"],
+        Value::Number(0u64.into())
+    );
+    assert_eq!(
+        payload["attention_plan"]["passive"],
+        Value::Number(0u64.into())
+    );
+    assert_eq!(
+        payload["attention_plan"]["requires_ack_count"],
+        Value::Number(2u64.into())
+    );
+    assert_eq!(
+        payload["attention_plan"]["focus_capsule_id"],
+        Value::String("cap-stead-batch-1".into())
+    );
     assert!(
         payload["results"][1]["error"]
             .as_str()

@@ -810,6 +810,7 @@ struct SteadBatchReport {
     processed: u32,
     succeeded: u32,
     failed: u32,
+    attention_plan: SteadAttentionPlan,
     results: Vec<SteadBatchResult>,
 }
 
@@ -827,6 +828,7 @@ fn stead_dispatch_batch(args: &[String]) -> Result<(), Box<dyn std::error::Error
     let capsule_db = PathBuf::from(required_arg(args, "--capsule-db")?);
     let events = parse_dispatch_events(&required_arg(args, "--events-json")?)
         .map_err(|error| error.to_string())?;
+    let attention_plan = build_stead_attention_plan(&events);
     let fail_on_missing_capsules = optional_arg(args, "--fail-on-missing-capsules")
         .map(|value| parse_bool(&value))
         .transpose()?
@@ -886,6 +888,7 @@ fn stead_dispatch_batch(args: &[String]) -> Result<(), Box<dyn std::error::Error
         processed: (succeeded + failed),
         succeeded,
         failed,
+        attention_plan,
         results,
     };
     println!("{}", serde_json::to_string(&report)?);
@@ -1004,6 +1007,12 @@ fn stead_validate_events(args: &[String]) -> Result<(), Box<dyn std::error::Erro
 fn stead_attention_plan(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let events = parse_dispatch_events(&required_arg(args, "--events-json")?)
         .map_err(|error| error.to_string())?;
+    let plan = build_stead_attention_plan(&events);
+    println!("{}", serde_json::to_string(&plan)?);
+    Ok(())
+}
+
+fn build_stead_attention_plan(events: &[DispatchEvent]) -> SteadAttentionPlan {
     let policy = AttentionPolicy;
 
     let mut blocking = 0u32;
@@ -1018,11 +1027,7 @@ fn stead_attention_plan(args: &[String]) -> Result<(), Box<dyn std::error::Error
         let routed = policy.route(&AttentionEvent {
             capsule_id: event.capsule_id.clone(),
             signal: event.signal,
-            summary: format!(
-                "{} from {}",
-                signal_to_str(event.signal),
-                event.upstream
-            ),
+            summary: format!("{} from {}", signal_to_str(event.signal), event.upstream),
         });
         let priority_rank = attention_priority_rank(routed.priority);
         if priority_rank > focus_priority {
@@ -1043,16 +1048,14 @@ fn stead_attention_plan(args: &[String]) -> Result<(), Box<dyn std::error::Error
         routes.push(routed);
     }
 
-    let plan = SteadAttentionPlan {
+    SteadAttentionPlan {
         blocking,
         active,
         passive,
         requires_ack_count,
         focus_capsule_id,
         routes,
-    };
-    println!("{}", serde_json::to_string(&plan)?);
-    Ok(())
+    }
 }
 
 fn attention_priority_rank(value: AttentionPriority) -> u8 {

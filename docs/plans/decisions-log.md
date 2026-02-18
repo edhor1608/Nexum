@@ -467,3 +467,16 @@ Rationale:
 
 Consequences:
 - Stead CLI now includes an explicit attention planning surface with snapshot-locked schema suitable for supervisor integration.
+
+## ADR-IMPL-037
+Context:
+- Dispatch-batch execution output exposed per-event success/failure but omitted aggregate attention-routing context, requiring extra calls for supervisory decisioning.
+
+Decision:
+- Embed `attention_plan` summary directly in `stead dispatch-batch` response payload.
+
+Rationale:
+- Consolidates execution and supervision signals into one control-plane response, reducing orchestration round-trips and keeping routing semantics aligned.
+
+Consequences:
+- Dispatch-batch contract now includes stable attention aggregate fields (`blocking`, `active`, `passive`, `requires_ack_count`, `focus_capsule_id`) with shared planning logic.
