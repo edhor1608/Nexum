@@ -47,6 +47,8 @@ pub enum RunFlowError {
     Events(#[from] EventError),
     #[error("routing failed: {0}")]
     Routing(String),
+    #[error("time: {0}")]
+    Time(#[from] std::time::SystemTimeError),
 }
 
 pub fn run_restore_flow(input: RestoreRunInput) -> Result<RestoreRunSummary, RunFlowError> {
@@ -84,27 +86,33 @@ pub fn run_restore_flow(input: RestoreRunInput) -> Result<RestoreRunSummary, Run
     let shell_script = render_shell_script(&build_niri_shell_plan(&restore));
 
     let mut events = EventStore::open(&input.events_db)?;
-    events.append(RuntimeEvent {
-        capsule_id: capsule.capsule_id.clone(),
-        component: "runflow".into(),
-        level: "info".into(),
-        message: "restore start".into(),
-        ts_unix_ms: now_unix_ms(),
-    })?;
-    events.append(RuntimeEvent {
-        capsule_id: capsule.capsule_id.clone(),
-        component: "routing".into(),
-        level: "info".into(),
-        message: format!("route ensured for {}", capsule.domain()),
-        ts_unix_ms: now_unix_ms(),
-    })?;
-    events.append(RuntimeEvent {
-        capsule_id: capsule.capsule_id.clone(),
-        component: "runflow".into(),
-        level: "info".into(),
-        message: "restore plan ready".into(),
-        ts_unix_ms: now_unix_ms(),
-    })?;
+    let events_payloads = vec![
+        RuntimeEvent {
+            capsule_id: capsule.capsule_id.clone(),
+            component: "runflow".into(),
+            level: "info".into(),
+            message: "restore start".into(),
+            ts_unix_ms: now_unix_ms()?,
+        },
+        RuntimeEvent {
+            capsule_id: capsule.capsule_id.clone(),
+            component: "routing".into(),
+            level: "info".into(),
+            message: format!("route ensured for {}", capsule.domain()),
+            ts_unix_ms: now_unix_ms()?,
+        },
+        RuntimeEvent {
+            capsule_id: capsule.capsule_id.clone(),
+            component: "runflow".into(),
+            level: "info".into(),
+            message: "restore plan ready".into(),
+            ts_unix_ms: now_unix_ms()?,
+        },
+    ];
+    let events_written = events_payloads.len() as u32;
+    for event in events_payloads {
+        events.append(event)?;
+    }
 
     Ok(RestoreRunSummary {
         capsule_id: capsule.capsule_id.clone(),
@@ -112,13 +120,14 @@ pub fn run_restore_flow(input: RestoreRunInput) -> Result<RestoreRunSummary, Run
         target_budget_ms: restore.target_budget_ms,
         shell_script,
         tls_fingerprint_sha256: tls.fingerprint_sha256,
-        events_written: 3,
+        events_written,
     })
 }
 
-fn now_unix_ms() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("clock before epoch")
-        .as_millis() as u64
+fn now_unix_ms() -> Result<u64, std::time::SystemTimeError> {
+    Ok(
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)?
+            .as_millis() as u64,
+    )
 }

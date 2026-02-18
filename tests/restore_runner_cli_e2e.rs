@@ -36,7 +36,11 @@ fn nexumctl_run_restore_executes_end_to_end_plan() {
         .output()
         .unwrap();
 
-    assert!(out.status.success());
+    assert!(
+        out.status.success(),
+        "nexumctl stderr: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     let value: Value = serde_json::from_slice(&out.stdout).unwrap();
 
     assert_eq!(value["capsule_id"], Value::String("cap-run-cli".into()));
