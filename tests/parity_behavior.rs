@@ -41,5 +41,5 @@ fn parity_report_lists_specific_differences() {
             .iter()
             .any(|m| m.contains("attention_priority"))
     );
-    assert!(report.parity_score < 1.0);
+    assert!((report.parity_score - 0.25).abs() < 1e-9);
 }
