@@ -272,7 +272,7 @@ fn cutover_apply(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     });
 
     let mut flags = CutoverFlags::load_or_default(&file)?;
-    apply_cutover(&mut flags, &decision, capability);
+    apply_cutover(&mut flags, &decision);
     flags.save(&file)?;
 
     println!("{}", serde_json::to_string(&decision)?);

@@ -76,11 +76,13 @@
 - TLS CLI e2e validation.
 
 ## Additional Work (Milestone 8)
+
 - Added cutover gate evaluator for routing/restore/attention capability rollout.
 - Added gate application flow that updates flags only when decision allows.
 - Extended `nexumctl` with `cutover apply` command.
 
 ## New Test Coverage (Milestone 8)
+
 - Cutover gate unit tests for allow/deny scenarios.
 - Cutover integration test with parity + flags application.
 - Cutover decision snapshot contract.
