@@ -43,3 +43,21 @@ fn snapshot_stead_validate_events_contract() {
     let payload: Value = serde_json::from_slice(&out.stdout).unwrap();
     insta::assert_yaml_snapshot!("stead_validate_events_contract", payload);
 }
+
+#[test]
+fn snapshot_stead_attention_plan_contract() {
+    let nexumctl = assert_cmd::cargo::cargo_bin!("nexumctl");
+    let events = r#"[{"capsule_id":"cap-passive","signal":"passive_completion","upstream":"127.0.0.1:5200"},{"capsule_id":"cap-active","signal":"needs_decision","upstream":"127.0.0.1:5201"},{"capsule_id":"cap-critical","signal":"critical_failure","upstream":"127.0.0.1:5202"}]"#;
+
+    let out = Command::new(nexumctl)
+        .arg("stead")
+        .arg("attention-plan")
+        .arg("--events-json")
+        .arg(events)
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+
+    let payload: Value = serde_json::from_slice(&out.stdout).unwrap();
+    insta::assert_yaml_snapshot!("stead_attention_plan_contract", payload);
+}

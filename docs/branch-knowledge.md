@@ -335,3 +335,15 @@
 
 ## New Test Coverage (Milestone 35)
 - Stead CLI e2e validating strict batch preflight failure path and asserting zero event-store side effects when aborted.
+
+## Additional Work (Milestone 36)
+- Added `nexumctl stead attention-plan` command for side-effect-free Stead signal routing preview.
+- Command now produces machine-readable attention routing payload with:
+  - priority counters (`blocking`, `active`, `passive`)
+  - `requires_ack_count`
+  - `focus_capsule_id` selected by highest-priority pending signal
+  - per-event routed attention entries (`priority`, `channel`, `requires_ack`, `summary`)
+
+## New Test Coverage (Milestone 36)
+- Stead CLI e2e validating priority counters, ack counts, and focus capsule selection behavior.
+- Snapshot contract test for attention-plan payload shape (`tests/snapshots/stead_snapshots__stead_attention_plan_contract.snap`).
