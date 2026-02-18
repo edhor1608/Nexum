@@ -90,3 +90,16 @@ Rationale:
 
 Consequences:
 - Metadata file integrity is now part of TLS operational correctness.
+
+## ADR-IMPL-008
+Context:
+- Internal capability cutovers need explicit policy gates tied to parity and runtime health.
+
+Decision:
+- Add `cutover` module that evaluates gate criteria and applies capability flags only when all gates pass.
+
+Rationale:
+- Makes rollout decisions deterministic, auditable, and reversible.
+
+Consequences:
+- Threshold tuning (parity and critical event limits) becomes an operational responsibility.
