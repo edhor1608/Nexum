@@ -49,7 +49,7 @@ fn nexumctl_run_restore_executes_end_to_end_plan() {
         value["shell_script"]
             .as_str()
             .unwrap()
-            .contains("xdg-open https://runner-cli.nexum.local")
+            .contains("xdg-open 'https://runner-cli.nexum.local'")
     );
     assert_eq!(value["events_written"], Value::Number(3u64.into()));
 }

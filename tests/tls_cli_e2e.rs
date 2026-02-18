@@ -58,3 +58,24 @@ fn nexumctl_tls_ensure_and_rotate_work() {
         rotated["record"]["fingerprint_sha256"]
     );
 }
+
+#[test]
+fn nexumctl_tls_ensure_rejects_missing_validity_days_value() {
+    let dir = tempdir().unwrap();
+    let nexumctl = assert_cmd::cargo::cargo_bin!("nexumctl");
+
+    let ensure = Command::new(nexumctl)
+        .arg("tls")
+        .arg("ensure")
+        .arg("--dir")
+        .arg(dir.path())
+        .arg("--domain")
+        .arg("gateway.nexum.local")
+        .arg("--validity-days")
+        .output()
+        .unwrap();
+
+    assert!(!ensure.status.success());
+    let stderr = String::from_utf8(ensure.stderr).unwrap();
+    assert!(stderr.contains("missing value for --validity-days"));
+}

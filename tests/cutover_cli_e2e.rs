@@ -42,6 +42,6 @@ fn nexumctl_cutover_apply_updates_flags_when_allowed() {
         .unwrap();
 
     assert!(show.status.success());
-    let flags = String::from_utf8(show.stdout).unwrap();
-    assert!(flags.contains("\"routing_control_plane\":true"));
+    let flags: Value = serde_json::from_slice(&show.stdout).unwrap();
+    assert_eq!(flags["routing_control_plane"], Value::Bool(true));
 }

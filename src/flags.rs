@@ -42,12 +42,11 @@ impl Default for CutoverFlags {
 
 impl CutoverFlags {
     pub fn load_or_default(path: &Path) -> Result<Self, FlagError> {
-        if !path.exists() {
-            return Ok(Self::default());
+        match std::fs::read_to_string(path) {
+            Ok(content) => Ok(toml::from_str(&content)?),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Self::default()),
+            Err(error) => Err(error.into()),
         }
-
-        let content = std::fs::read_to_string(path)?;
-        Ok(toml::from_str(&content)?)
     }
 
     pub fn save(&self, path: &Path) -> Result<(), FlagError> {
