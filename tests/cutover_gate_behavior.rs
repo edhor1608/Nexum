@@ -69,3 +69,33 @@ fn denies_cutover_when_critical_events_exceed_limit() {
             .any(|r| r.contains("critical events"))
     );
 }
+
+#[test]
+fn denies_cutover_when_parity_is_not_finite() {
+    let decision = evaluate_cutover(&CutoverInput {
+        capability: Capability::Routing,
+        parity_score: f64::NAN,
+        min_parity_score: 0.95,
+        critical_events: 0,
+        max_critical_events: 0,
+        shadow_mode_enabled: true,
+    });
+
+    assert!(!decision.allowed);
+    assert!(decision.reasons.iter().any(|r| r.contains("finite")));
+}
+
+#[test]
+fn denies_cutover_when_parity_is_out_of_range() {
+    let decision = evaluate_cutover(&CutoverInput {
+        capability: Capability::Routing,
+        parity_score: 1.1,
+        min_parity_score: 0.95,
+        critical_events: 0,
+        max_critical_events: 0,
+        shadow_mode_enabled: true,
+    });
+
+    assert!(!decision.allowed);
+    assert!(decision.reasons.iter().any(|r| r.contains("between 0 and 1")));
+}

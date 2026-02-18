@@ -33,48 +33,27 @@ fn event_store_persists_and_lists_runtime_events() {
 }
 
 #[test]
-fn event_store_lists_recent_events_with_filters_and_limit() {
+fn event_store_list_for_capsule_supports_pagination() {
     let dir = tempdir().unwrap();
     let db = dir.path().join("events.sqlite3");
 
     let mut store = EventStore::open(&db).unwrap();
-    store
-        .append(RuntimeEvent {
-            capsule_id: "cap-obs-a".into(),
-            component: "routing".into(),
-            level: "info".into(),
-            message: "route ready".into(),
-            ts_unix_ms: 1000,
-        })
-        .unwrap();
-    store
-        .append(RuntimeEvent {
-            capsule_id: "cap-obs-a".into(),
-            component: "restore".into(),
-            level: "critical".into(),
-            message: "restore failed".into(),
-            ts_unix_ms: 1100,
-        })
-        .unwrap();
-    store
-        .append(RuntimeEvent {
-            capsule_id: "cap-obs-b".into(),
-            component: "restore".into(),
-            level: "critical".into(),
-            message: "another failure".into(),
-            ts_unix_ms: 1200,
-        })
-        .unwrap();
+    for idx in 0..5 {
+        store
+            .append(RuntimeEvent {
+                capsule_id: "cap-obs-2".into(),
+                component: "routing".into(),
+                level: "info".into(),
+                message: format!("event-{idx}"),
+                ts_unix_ms: 2000 + idx,
+            })
+            .unwrap();
+    }
 
-    let listed = store
-        .list_recent(Some("cap-obs-a"), Some("critical"), Some(5))
+    let paged = store
+        .list_for_capsule_paginated("cap-obs-2", 2, 1)
         .unwrap();
-    assert_eq!(listed.len(), 1);
-    assert_eq!(listed[0].capsule_id, "cap-obs-a");
-    assert_eq!(listed[0].message, "restore failed");
-
-    let latest = store.list_recent(None, Some("critical"), Some(1)).unwrap();
-    assert_eq!(latest.len(), 1);
-    assert_eq!(latest[0].capsule_id, "cap-obs-b");
-    assert_eq!(latest[0].ts_unix_ms, 1200);
+    assert_eq!(paged.len(), 2);
+    assert_eq!(paged[0].message, "event-1");
+    assert_eq!(paged[1].message, "event-2");
 }
