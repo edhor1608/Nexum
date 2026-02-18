@@ -26,6 +26,8 @@ pub struct EventStore {
     conn: Connection,
 }
 
+const DEFAULT_LIST_LIMIT: u32 = 500;
+
 impl EventStore {
     pub fn open(path: &Path) -> Result<Self, EventError> {
         if let Some(parent) = path.parent() {
@@ -43,6 +45,7 @@ impl EventStore {
                 message TEXT NOT NULL,
                 ts_unix_ms INTEGER NOT NULL
             );
+            CREATE INDEX IF NOT EXISTS idx_runtime_events_capsule_id ON runtime_events(capsule_id);
             ",
         )?;
 
@@ -68,17 +71,28 @@ impl EventStore {
     }
 
     pub fn list_for_capsule(&self, capsule_id: &str) -> Result<Vec<RuntimeEvent>, EventError> {
+        self.list_for_capsule_paginated(capsule_id, DEFAULT_LIST_LIMIT, 0)
+    }
+
+    pub fn list_for_capsule_paginated(
+        &self,
+        capsule_id: &str,
+        limit: u32,
+        offset: u32,
+    ) -> Result<Vec<RuntimeEvent>, EventError> {
         let mut stmt = self.conn.prepare(
             "
             SELECT capsule_id, component, level, message, ts_unix_ms
             FROM runtime_events
             WHERE capsule_id = ?1
             ORDER BY id ASC
+            LIMIT ?2
+            OFFSET ?3
             ",
         )?;
 
         let rows = stmt
-            .query_map(params![capsule_id], |row| {
+            .query_map(params![capsule_id, limit, offset], |row| {
                 Ok(RuntimeEvent {
                     capsule_id: row.get(0)?,
                     component: row.get(1)?,
