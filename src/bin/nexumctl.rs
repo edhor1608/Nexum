@@ -1,17 +1,20 @@
 use std::path::PathBuf;
 
 use nexum::{
-    capsule::{Capsule, CapsuleMode},
+    capsule::{Capsule, CapsuleMode, CapsuleState, parse_state, state_to_str},
     cutover::{CutoverInput, apply_cutover, evaluate_cutover, parse_capability},
+    events::EventStore,
     flags::{CutoverFlags, FlagName},
     restore::SignalType,
     routing::{RouteCommand, default_socket_path, send_command},
     runflow::{RestoreRunInput, run_restore_flow},
     shadow::{ExecutionResult, compare_execution},
     shell::{NiriShellCommand, NiriShellPlan, render_shell_script},
+    stead::parse_dispatch_event,
     store::CapsuleStore,
     tls::{ensure_self_signed_cert, rotate_if_expiring},
 };
+use serde::Serialize;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = std::env::args().skip(1).collect::<Vec<_>>();
@@ -24,8 +27,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "capsule" => capsule_command(&args[1..])?,
         "flags" => flags_command(&args[1..])?,
         "parity" => parity_command(&args[1..])?,
+        "events" => events_command(&args[1..])?,
         "routing" => routing_command(&args[1..])?,
         "shell" => shell_command(&args[1..])?,
+        "stead" => stead_command(&args[1..])?,
+        "supervisor" => supervisor_command(&args[1..])?,
         "tls" => tls_command(&args[1..])?,
         "cutover" => cutover_command(&args[1..])?,
         "run" => run_command(&args[1..])?,
@@ -38,6 +44,150 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+#[derive(Debug, Serialize)]
+struct SupervisorCapsuleStatus {
+    capsule_id: String,
+    display_name: String,
+    repo_path: String,
+    mode: String,
+    state: String,
+    workspace: u16,
+    critical_events: u32,
+    last_event_level: Option<String>,
+    last_event_message: Option<String>,
+    last_event_ts_unix_ms: Option<u64>,
+}
+
+#[derive(Debug, Serialize)]
+struct SupervisorStatusReport {
+    flags: CutoverFlags,
+    total_capsules: u32,
+    degraded_capsules: u32,
+    archived_capsules: u32,
+    critical_events: u32,
+    capsules: Vec<SupervisorCapsuleStatus>,
+}
+
+#[derive(Debug, Serialize)]
+struct SupervisorBlocker {
+    capsule_id: String,
+    state: String,
+    critical_events: u32,
+    reasons: Vec<String>,
+}
+
+fn supervisor_command(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    if args.is_empty() {
+        usage();
+        std::process::exit(2);
+    }
+
+    match args[0].as_str() {
+        "status" => supervisor_status(&args[1..]),
+        "blockers" => supervisor_blockers(&args[1..]),
+        _ => {
+            usage();
+            std::process::exit(2);
+        }
+    }
+}
+
+fn supervisor_status(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let capsule_db = PathBuf::from(required_arg(args, "--capsule-db")?);
+    let events_db = PathBuf::from(required_arg(args, "--events-db")?);
+    let flags_file = PathBuf::from(required_arg(args, "--flags-file")?);
+
+    let store = CapsuleStore::open(&capsule_db)?;
+    let events = EventStore::open(&events_db)?;
+    let flags = CutoverFlags::load_or_default(&flags_file)?;
+    let listed = store.list()?;
+
+    let mut degraded_capsules = 0u32;
+    let mut archived_capsules = 0u32;
+    let mut critical_events = 0u32;
+    let mut capsules = Vec::with_capacity(listed.len());
+
+    for capsule in listed {
+        if capsule.state == CapsuleState::Degraded {
+            degraded_capsules += 1;
+        }
+        if capsule.state == CapsuleState::Archived {
+            archived_capsules += 1;
+        }
+
+        let capsule_critical = events.count_for_capsule_level(&capsule.capsule_id, "critical")?;
+        critical_events += capsule_critical;
+
+        let last = events
+            .list_recent(Some(&capsule.capsule_id), None, Some(1))?
+            .into_iter()
+            .next();
+
+        capsules.push(SupervisorCapsuleStatus {
+            capsule_id: capsule.capsule_id,
+            display_name: capsule.display_name,
+            repo_path: capsule.repo_path,
+            mode: mode_to_str(capsule.mode).to_string(),
+            state: state_to_str(capsule.state).to_string(),
+            workspace: capsule.workspace,
+            critical_events: capsule_critical,
+            last_event_level: last.as_ref().map(|value| value.level.clone()),
+            last_event_message: last.as_ref().map(|value| value.message.clone()),
+            last_event_ts_unix_ms: last.as_ref().map(|value| value.ts_unix_ms),
+        });
+    }
+
+    let report = SupervisorStatusReport {
+        flags,
+        total_capsules: capsules.len() as u32,
+        degraded_capsules,
+        archived_capsules,
+        critical_events,
+        capsules,
+    };
+
+    println!("{}", serde_json::to_string(&report)?);
+    Ok(())
+}
+
+fn supervisor_blockers(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let capsule_db = PathBuf::from(required_arg(args, "--capsule-db")?);
+    let events_db = PathBuf::from(required_arg(args, "--events-db")?);
+    let critical_threshold = optional_arg(args, "--critical-threshold")
+        .map(|value| value.parse::<u32>())
+        .transpose()?
+        .unwrap_or(1);
+
+    let store = CapsuleStore::open(&capsule_db)?;
+    let events = EventStore::open(&events_db)?;
+    let listed = store.list()?;
+
+    let mut blockers = Vec::new();
+    for capsule in listed {
+        let critical_events = events.count_for_capsule_level(&capsule.capsule_id, "critical")?;
+        let mut reasons = Vec::new();
+        if capsule.state == CapsuleState::Degraded {
+            reasons.push("state_degraded".to_string());
+        }
+        if critical_events >= critical_threshold {
+            reasons.push("critical_events_threshold".to_string());
+        }
+        if reasons.is_empty() {
+            continue;
+        }
+
+        blockers.push(SupervisorBlocker {
+            capsule_id: capsule.capsule_id,
+            state: state_to_str(capsule.state).to_string(),
+            critical_events,
+            reasons,
+        });
+    }
+
+    println!("{}", serde_json::to_string(&blockers)?);
+    Ok(())
+}
+
 fn capsule_command(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     if args.is_empty() {
         usage();
@@ -47,6 +197,11 @@ fn capsule_command(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     match args[0].as_str() {
         "create" => capsule_create(&args[1..]),
         "list" => capsule_list(&args[1..]),
+        "rename" => capsule_rename(&args[1..]),
+        "set-repo" => capsule_set_repo(&args[1..]),
+        "set-state" => capsule_set_state(&args[1..]),
+        "allocate-port" => capsule_allocate_port(&args[1..]),
+        "release-ports" => capsule_release_ports(&args[1..]),
         _ => {
             usage();
             std::process::exit(2);
@@ -60,11 +215,12 @@ fn capsule_create(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let name = required_arg(args, "--name")?;
     let workspace = required_arg(args, "--workspace")?.parse::<u16>()?;
     let mode = required_arg(args, "--mode")?;
+    let repo_path = optional_arg(args, "--repo-path").unwrap_or_default();
 
     let mode = parse_mode(&mode)?;
 
     let mut store = CapsuleStore::open(&PathBuf::from(db))?;
-    let capsule = Capsule::new(&id, &name, mode, workspace);
+    let capsule = Capsule::new(&id, &name, mode, workspace).with_repo_path(&repo_path);
     store.upsert(capsule)?;
 
     println!("created {}", id);
@@ -76,21 +232,94 @@ fn capsule_list(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let store = CapsuleStore::open(&PathBuf::from(db))?;
     let listed = store.list()?;
 
-    let payload = listed
-        .into_iter()
-        .map(|capsule| {
-            serde_json::json!({
-                "capsule_id": capsule.capsule_id,
-                "slug": capsule.slug,
-                "domain": capsule.domain(),
-                "display_name": capsule.display_name,
-                "mode": mode_to_str(capsule.mode),
-                "workspace": capsule.workspace,
-            })
-        })
-        .collect::<Vec<_>>();
+    let mut payload = Vec::with_capacity(listed.len());
+    for capsule in listed {
+        let allocated_ports = store.list_ports(&capsule.capsule_id)?;
+        payload.push(serde_json::json!({
+            "capsule_id": capsule.capsule_id,
+            "slug": capsule.slug,
+            "domain": capsule.domain(),
+            "display_name": capsule.display_name,
+            "repo_path": capsule.repo_path,
+            "mode": mode_to_str(capsule.mode),
+            "state": state_to_str(capsule.state),
+            "workspace": capsule.workspace,
+            "allocated_ports": allocated_ports,
+        }));
+    }
 
     println!("{}", serde_json::to_string(&payload)?);
+    Ok(())
+}
+
+fn capsule_rename(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let db = required_arg(args, "--db")?;
+    let id = required_arg(args, "--id")?;
+    let name = required_arg(args, "--name")?;
+
+    let mut store = CapsuleStore::open(&PathBuf::from(db))?;
+    store.rename_display_name(&id, &name)?;
+
+    println!("renamed {}", id);
+    Ok(())
+}
+
+fn capsule_set_state(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let db = required_arg(args, "--db")?;
+    let id = required_arg(args, "--id")?;
+    let state =
+        parse_state(&required_arg(args, "--state")?).ok_or_else(|| "invalid state".to_string())?;
+
+    let mut store = CapsuleStore::open(&PathBuf::from(db))?;
+    store.transition_state(&id, state)?;
+
+    println!("state_updated {}", id);
+    Ok(())
+}
+
+fn capsule_set_repo(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let db = required_arg(args, "--db")?;
+    let id = required_arg(args, "--id")?;
+    let repo_path = required_arg(args, "--repo-path")?;
+
+    let mut store = CapsuleStore::open(&PathBuf::from(db))?;
+    store.set_repo_path(&id, &repo_path)?;
+
+    println!("repo_updated {}", id);
+    Ok(())
+}
+
+fn capsule_allocate_port(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let db = required_arg(args, "--db")?;
+    let id = required_arg(args, "--id")?;
+    let start = required_arg(args, "--start")?.parse::<u16>()?;
+    let end = required_arg(args, "--end")?.parse::<u16>()?;
+
+    let mut store = CapsuleStore::open(&PathBuf::from(db))?;
+    let port = store.allocate_port(&id, start, end)?;
+    println!(
+        "{}",
+        serde_json::to_string(&serde_json::json!({
+            "capsule_id": id,
+            "port": port,
+        }))?
+    );
+    Ok(())
+}
+
+fn capsule_release_ports(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let db = required_arg(args, "--db")?;
+    let id = required_arg(args, "--id")?;
+
+    let mut store = CapsuleStore::open(&PathBuf::from(db))?;
+    let released = store.release_ports(&id)?;
+    println!(
+        "{}",
+        serde_json::to_string(&serde_json::json!({
+            "capsule_id": id,
+            "released": released,
+        }))?
+    );
     Ok(())
 }
 
@@ -153,6 +382,44 @@ fn parity_command(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
             std::process::exit(2);
         }
     }
+}
+
+fn events_command(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    if args.is_empty() {
+        usage();
+        std::process::exit(2);
+    }
+
+    match args[0].as_str() {
+        "summary" => events_summary(&args[1..]),
+        "list" => events_list(&args[1..]),
+        _ => {
+            usage();
+            std::process::exit(2);
+        }
+    }
+}
+
+fn events_summary(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let db = required_arg(args, "--db")?;
+    let store = EventStore::open(&PathBuf::from(db))?;
+    let summary = store.summary()?;
+    println!("{}", serde_json::to_string(&summary)?);
+    Ok(())
+}
+
+fn events_list(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let db = required_arg(args, "--db")?;
+    let capsule_id = optional_arg(args, "--capsule-id");
+    let level = optional_arg(args, "--level");
+    let limit = optional_arg(args, "--limit")
+        .map(|value| value.parse::<u32>())
+        .transpose()?;
+
+    let store = EventStore::open(&PathBuf::from(db))?;
+    let listed = store.list_recent(capsule_id.as_deref(), level.as_deref(), limit)?;
+    println!("{}", serde_json::to_string(&listed)?);
+    Ok(())
 }
 
 fn parity_compare(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
@@ -334,6 +601,8 @@ fn cutover_command(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
 
     match args[0].as_str() {
         "apply" => cutover_apply(&args[1..]),
+        "apply-from-events" => cutover_apply_from_events(&args[1..]),
+        "apply-from-summary" => cutover_apply_from_summary(&args[1..]),
         _ => {
             usage();
             std::process::exit(2);
@@ -368,6 +637,67 @@ fn cutover_apply(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+fn cutover_apply_from_events(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let file = PathBuf::from(required_arg(args, "--file")?);
+    let capability = parse_capability(&required_arg(args, "--capability")?)
+        .ok_or_else(|| "invalid capability".to_string())?;
+    let parity_score = required_arg(args, "--parity-score")?.parse::<f64>()?;
+    let min_parity_score = required_arg(args, "--min-parity-score")?.parse::<f64>()?;
+    let events_db = PathBuf::from(required_arg(args, "--events-db")?);
+    let capsule_id = required_arg(args, "--capsule-id")?;
+    let max_critical_events = required_arg(args, "--max-critical-events")?.parse::<u32>()?;
+    let shadow_mode_enabled = parse_bool(&required_arg(args, "--shadow-mode")?)?;
+
+    let events = EventStore::open(&events_db)?;
+    let critical_events = events.count_for_capsule_level(&capsule_id, "critical")?;
+
+    let decision = evaluate_cutover(&CutoverInput {
+        capability,
+        parity_score,
+        min_parity_score,
+        critical_events,
+        max_critical_events,
+        shadow_mode_enabled,
+    });
+
+    let mut flags = CutoverFlags::load_or_default(&file)?;
+    apply_cutover(&mut flags, &decision);
+    flags.save(&file)?;
+
+    println!("{}", serde_json::to_string(&decision)?);
+    Ok(())
+}
+
+fn cutover_apply_from_summary(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let file = PathBuf::from(required_arg(args, "--file")?);
+    let capability = parse_capability(&required_arg(args, "--capability")?)
+        .ok_or_else(|| "invalid capability".to_string())?;
+    let parity_score = required_arg(args, "--parity-score")?.parse::<f64>()?;
+    let min_parity_score = required_arg(args, "--min-parity-score")?.parse::<f64>()?;
+    let events_db = PathBuf::from(required_arg(args, "--events-db")?);
+    let max_critical_events = required_arg(args, "--max-critical-events")?.parse::<u32>()?;
+    let shadow_mode_enabled = parse_bool(&required_arg(args, "--shadow-mode")?)?;
+
+    let events = EventStore::open(&events_db)?;
+    let critical_events = events.summary()?.critical_events;
+
+    let decision = evaluate_cutover(&CutoverInput {
+        capability,
+        parity_score,
+        min_parity_score,
+        critical_events,
+        max_critical_events,
+        shadow_mode_enabled,
+    });
+
+    let mut flags = CutoverFlags::load_or_default(&file)?;
+    apply_cutover(&mut flags, &decision);
+    flags.save(&file)?;
+
+    println!("{}", serde_json::to_string(&decision)?);
+    Ok(())
+}
+
 fn run_command(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     if args.is_empty() {
         usage();
@@ -376,6 +706,7 @@ fn run_command(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
 
     match args[0].as_str() {
         "restore" => run_restore(&args[1..]),
+        "restore-capsule" => run_restore_capsule(&args[1..]),
         _ => {
             usage();
             std::process::exit(2);
@@ -383,8 +714,92 @@ fn run_command(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     }
 }
 
+fn stead_command(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    if args.is_empty() {
+        usage();
+        std::process::exit(2);
+    }
+
+    match args[0].as_str() {
+        "dispatch" => stead_dispatch(&args[1..]),
+        _ => {
+            usage();
+            std::process::exit(2);
+        }
+    }
+}
+
+fn stead_dispatch(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let capsule_db = PathBuf::from(required_arg(args, "--capsule-db")?);
+    let event = parse_dispatch_event(&required_arg(args, "--event-json")?)
+        .map_err(|error| error.to_string())?;
+
+    let store = CapsuleStore::open(&capsule_db)?;
+    let capsule = store
+        .get(&event.capsule_id)?
+        .ok_or_else(|| format!("unknown capsule: {}", event.capsule_id))?;
+
+    let terminal_cmd = if let Some(terminal) = optional_arg(args, "--terminal") {
+        terminal
+    } else if !capsule.repo_path.is_empty() {
+        format!("cd {} && nix develop", capsule.repo_path)
+    } else {
+        return Err(
+            "missing restore surfaces: provide --terminal and --editor or set capsule repo_path"
+                .into(),
+        );
+    };
+
+    let editor_target = if let Some(editor) = optional_arg(args, "--editor") {
+        editor
+    } else if !capsule.repo_path.is_empty() {
+        capsule.repo_path.clone()
+    } else {
+        return Err(
+            "missing restore surfaces: provide --terminal and --editor or set capsule repo_path"
+                .into(),
+        );
+    };
+
+    let browser_url =
+        optional_arg(args, "--browser").unwrap_or_else(|| format!("https://{}", capsule.domain()));
+
+    let summary = run_restore_flow(RestoreRunInput {
+        capsule_id: capsule.capsule_id,
+        display_name: capsule.display_name,
+        workspace: capsule.workspace,
+        signal: event.signal,
+        terminal_cmd,
+        editor_target,
+        browser_url,
+        route_upstream: event.upstream,
+        routing_socket: optional_arg(args, "--routing-socket").map(PathBuf::from),
+        identity_collision: event.identity_collision,
+        high_risk_secret_workflow: event.high_risk_secret_workflow,
+        force_isolated_mode: event.force_isolated_mode,
+        capsule_db: Some(capsule_db),
+        tls_dir: PathBuf::from(required_arg(args, "--tls-dir")?),
+        events_db: PathBuf::from(required_arg(args, "--events-db")?),
+    })?;
+
+    println!("{}", serde_json::to_string(&summary)?);
+    Ok(())
+}
+
 fn run_restore(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let signal = parse_signal(&required_arg(args, "--signal")?)?;
+    let identity_collision = optional_arg(args, "--identity-collision")
+        .map(|value| parse_bool(&value))
+        .transpose()?
+        .unwrap_or(false);
+    let high_risk_secret_workflow = optional_arg(args, "--high-risk-secret")
+        .map(|value| parse_bool(&value))
+        .transpose()?
+        .unwrap_or(false);
+    let force_isolated_mode = optional_arg(args, "--force-isolated")
+        .map(|value| parse_bool(&value))
+        .transpose()?
+        .unwrap_or(false);
 
     let summary = run_restore_flow(RestoreRunInput {
         capsule_id: required_arg(args, "--capsule-id")?,
@@ -395,6 +810,82 @@ fn run_restore(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
         editor_target: required_arg(args, "--editor")?,
         browser_url: required_arg(args, "--browser")?,
         route_upstream: required_arg(args, "--upstream")?,
+        routing_socket: optional_arg(args, "--routing-socket").map(PathBuf::from),
+        identity_collision,
+        high_risk_secret_workflow,
+        force_isolated_mode,
+        capsule_db: optional_arg(args, "--capsule-db").map(PathBuf::from),
+        tls_dir: PathBuf::from(required_arg(args, "--tls-dir")?),
+        events_db: PathBuf::from(required_arg(args, "--events-db")?),
+    })?;
+
+    println!("{}", serde_json::to_string(&summary)?);
+    Ok(())
+}
+
+fn run_restore_capsule(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let capsule_db = PathBuf::from(required_arg(args, "--capsule-db")?);
+    let capsule_id = required_arg(args, "--capsule-id")?;
+    let signal = parse_signal(&required_arg(args, "--signal")?)?;
+    let route_upstream = required_arg(args, "--upstream")?;
+    let routing_socket = optional_arg(args, "--routing-socket").map(PathBuf::from);
+    let identity_collision = optional_arg(args, "--identity-collision")
+        .map(|value| parse_bool(&value))
+        .transpose()?
+        .unwrap_or(false);
+    let high_risk_secret_workflow = optional_arg(args, "--high-risk-secret")
+        .map(|value| parse_bool(&value))
+        .transpose()?
+        .unwrap_or(false);
+    let force_isolated_mode = optional_arg(args, "--force-isolated")
+        .map(|value| parse_bool(&value))
+        .transpose()?
+        .unwrap_or(false);
+
+    let store = CapsuleStore::open(&capsule_db)?;
+    let capsule = store
+        .get(&capsule_id)?
+        .ok_or_else(|| format!("unknown capsule: {capsule_id}"))?;
+
+    let terminal_cmd = if let Some(terminal) = optional_arg(args, "--terminal") {
+        terminal
+    } else if !capsule.repo_path.is_empty() {
+        format!("cd {} && nix develop", capsule.repo_path)
+    } else {
+        return Err(
+            "missing restore surfaces: provide --terminal and --editor or set capsule repo_path"
+                .into(),
+        );
+    };
+
+    let editor_target = if let Some(editor) = optional_arg(args, "--editor") {
+        editor
+    } else if !capsule.repo_path.is_empty() {
+        capsule.repo_path.clone()
+    } else {
+        return Err(
+            "missing restore surfaces: provide --terminal and --editor or set capsule repo_path"
+                .into(),
+        );
+    };
+
+    let browser_url =
+        optional_arg(args, "--browser").unwrap_or_else(|| format!("https://{}", capsule.domain()));
+
+    let summary = run_restore_flow(RestoreRunInput {
+        capsule_id: capsule.capsule_id,
+        display_name: capsule.display_name,
+        workspace: capsule.workspace,
+        signal,
+        terminal_cmd,
+        editor_target,
+        browser_url,
+        route_upstream,
+        routing_socket,
+        identity_collision,
+        high_risk_secret_workflow,
+        force_isolated_mode,
+        capsule_db: Some(capsule_db),
         tls_dir: PathBuf::from(required_arg(args, "--tls-dir")?),
         events_db: PathBuf::from(required_arg(args, "--events-db")?),
     })?;
@@ -469,15 +960,26 @@ fn mode_to_str(mode: CapsuleMode) -> &'static str {
 
 fn usage() {
     eprintln!(
-        "nexumctl capsule create --db <path> --id <id> --name <name> --workspace <n> --mode <host_default|isolated_nix_shell>"
+        "nexumctl capsule create --db <path> --id <id> --name <name> --workspace <n> --mode <host_default|isolated_nix_shell> [--repo-path <path>]"
     );
     eprintln!("nexumctl capsule list --db <path>");
+    eprintln!("nexumctl capsule rename --db <path> --id <id> --name <name>");
+    eprintln!("nexumctl capsule set-repo --db <path> --id <id> --repo-path <path>");
+    eprintln!(
+        "nexumctl capsule set-state --db <path> --id <id> --state <creating|ready|restoring|degraded|archived>"
+    );
+    eprintln!("nexumctl capsule allocate-port --db <path> --id <id> --start <u16> --end <u16>");
+    eprintln!("nexumctl capsule release-ports --db <path> --id <id>");
     eprintln!(
         "nexumctl flags set --file <path> [--shadow true|false] [--routing true|false] [--restore true|false] [--attention true|false]"
     );
     eprintln!("nexumctl flags show --file <path>");
     eprintln!(
         "nexumctl parity compare (--primary-json <json> | --primary-file <path>) (--candidate-json <json> | --candidate-file <path>)"
+    );
+    eprintln!("nexumctl events summary --db <path>");
+    eprintln!(
+        "nexumctl events list --db <path> [--capsule-id <id>] [--level <level>] [--limit <n>]"
     );
     eprintln!("nexumctl routing health [--socket <path>]");
     eprintln!(
@@ -489,12 +991,30 @@ fn usage() {
     eprintln!(
         "nexumctl shell render --workspace <n> --terminal <cmd> --editor <path> --browser <url> --attention <level>"
     );
+    eprintln!(
+        "nexumctl stead dispatch --capsule-db <path> --event-json <json> [--terminal <cmd>] [--editor <path>] [--browser <url>] [--routing-socket <path>] --tls-dir <path> --events-db <path>"
+    );
+    eprintln!(
+        "nexumctl supervisor status --capsule-db <path> --events-db <path> --flags-file <path>"
+    );
+    eprintln!(
+        "nexumctl supervisor blockers --capsule-db <path> --events-db <path> [--critical-threshold <u32>]"
+    );
     eprintln!("nexumctl tls ensure --dir <path> --domain <domain> [--validity-days <days>]");
     eprintln!("nexumctl tls rotate --dir <path> --domain <domain> --threshold-days <days>");
     eprintln!(
         "nexumctl cutover apply --file <path> --capability <routing|restore|attention> --parity-score <f64> --min-parity-score <f64> --critical-events <u32> --max-critical-events <u32> --shadow-mode <true|false>"
     );
     eprintln!(
-        "nexumctl run restore --capsule-id <id> --name <name> --workspace <n> --signal <needs_decision|critical_failure|passive_completion> --terminal <cmd> --editor <path> --browser <url> --upstream <host:port> --tls-dir <path> --events-db <path>"
+        "nexumctl cutover apply-from-events --file <path> --capability <routing|restore|attention> --parity-score <f64> --min-parity-score <f64> --events-db <path> --capsule-id <id> --max-critical-events <u32> --shadow-mode <true|false>"
+    );
+    eprintln!(
+        "nexumctl cutover apply-from-summary --file <path> --capability <routing|restore|attention> --parity-score <f64> --min-parity-score <f64> --events-db <path> --max-critical-events <u32> --shadow-mode <true|false>"
+    );
+    eprintln!(
+        "nexumctl run restore --capsule-id <id> --name <name> --workspace <n> --signal <needs_decision|critical_failure|passive_completion> --terminal <cmd> --editor <path> --browser <url> --upstream <host:port> [--routing-socket <path>] [--identity-collision true|false] [--high-risk-secret true|false] [--force-isolated true|false] [--capsule-db <path>] --tls-dir <path> --events-db <path>"
+    );
+    eprintln!(
+        "nexumctl run restore-capsule --capsule-db <path> --capsule-id <id> --signal <needs_decision|critical_failure|passive_completion> --upstream <host:port> [--terminal <cmd>] [--editor <path>] [--browser <url>] [--routing-socket <path>] [--identity-collision true|false] [--high-risk-secret true|false] [--force-isolated true|false] --tls-dir <path> --events-db <path>"
     );
 }

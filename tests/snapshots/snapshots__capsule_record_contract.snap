@@ -1,10 +1,12 @@
 ---
 source: tests/snapshots.rs
-assertion_line: 7
+assertion_line: 12
 expression: capsule
 ---
 capsule_id: cap-snap-1
 slug: payments-control-plane
 display_name: Payments Control Plane
+repo_path: ""
 mode: host_default
+state: ready
 workspace: 11

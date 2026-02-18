@@ -119,7 +119,7 @@ Consequences:
 
 ## ADR-IMPL-010
 Context:
-- `nexumd` daemon protocol existed, but operators lacked a first-class CLI to exercise and verify it.
+- `nexumd` daemon protocol existed, but operators lacked a first-class CLI interface to exercise and verify it.
 
 Decision:
 - Add `nexumctl routing` subcommands that call daemon socket API (`health/register/resolve/remove/list`) and return JSON outcomes.
@@ -142,3 +142,237 @@ Rationale:
 
 Consequences:
 - Runflow now owns dual-path routing logic (daemon-backed and fallback in-process), which must remain behaviorally consistent.
+
+## ADR-IMPL-012
+Context:
+- v1 acceptance criteria required explicit proof for parallel capsule restore stability and sub-10s restore behavior.
+
+Decision:
+- Add dedicated acceptance-level e2e tests for 5 concurrent capsule restores and wall-clock restore completion budget.
+
+Rationale:
+- Keeps key product outcomes enforced in CI rather than implicit assumptions from lower-level tests.
+
+Consequences:
+- E2E suite runtime grows, but regressions against core v1 outcomes are now caught early.
+
+## ADR-IMPL-013
+Context:
+- Hybrid identity strategy required profile fallback behavior when domain isolation is insufficient due detected session collision.
+
+Decision:
+- Add `identity` policy module and restore CLI/runflow input flag (`--identity-collision`) to switch browser launch from `xdg-open` to dedicated profile command.
+
+Rationale:
+- Preserves domain-first default behavior while enabling deterministic fallback path for collision cases.
+
+Consequences:
+- Restore command contract now includes collision signaling input, and shell script generation includes policy-specific browser launch substitution.
+
+## ADR-IMPL-014
+Context:
+- Hybrid isolation policy required deterministic escalation beyond identity collision, including secret-sensitive workflows and explicit user overrides.
+
+Decision:
+- Add `isolation` policy module and expose escalation controls in restore CLI (`--high-risk-secret`, `--force-isolated`), with resulting mode surfaced in restore summary.
+
+Rationale:
+- Makes isolation behavior explicit, testable, and auditable while preserving host-default as baseline.
+
+Consequences:
+- Restore input/output contracts expanded, including new mode signal (`run_mode`) that downstream consumers may rely on.
+
+## ADR-IMPL-015
+Context:
+- Isolation policy required capsule-scoped runtime metadata and process-label conventions to improve observability and execution traceability.
+
+Decision:
+- Add `runtime_meta` module and prepend restore shell scripts with `NEXUM_*` exports plus `NEXUM_PROCESS_LABEL`.
+
+Rationale:
+- Makes capsule identity explicit in runtime execution surfaces without changing daemon protocol.
+
+Consequences:
+- Shell script output contract changed and is now guarded by snapshot/e2e tests.
+
+## ADR-IMPL-016
+Context:
+- Capsule specification required explicit lifecycle state transitions and metadata update operations, but implementation only supported create/list.
+
+Decision:
+- Add `CapsuleState` to core model, persist it in SQLite with migration-safe schema extension, and expose lifecycle mutations via CLI (`capsule rename`, `capsule set-state`).
+
+Rationale:
+- Makes lifecycle management enforceable through tested command paths rather than ad-hoc direct DB edits.
+
+Consequences:
+- Capsule serialization and YAML export contracts changed to include `state`.
+
+## ADR-IMPL-017
+Context:
+- Capsule specification required allocate/release port operations, but implementation only had an in-memory allocator disconnected from persisted capsule operations.
+
+Decision:
+- Add persisted `capsule_ports` mapping in SQLite and expose deterministic allocation/release through store + CLI commands.
+
+Rationale:
+- Keeps port ownership durable across process restarts while retaining predictable allocation semantics.
+
+Consequences:
+- Capsule list output now includes `allocated_ports`, and CLI contract expands with port lifecycle commands.
+
+## ADR-IMPL-018
+Context:
+- Restore flow specification required degraded continuation when routing is unavailable, but implementation aborted restore on socket-level routing failures.
+
+Decision:
+- Treat routing transport failures as degraded restore outcomes (`degraded=true`) while keeping domain-conflict responses as hard failures.
+
+Rationale:
+- Preserves user recovery path under transient local routing issues while still preventing unsafe domain ownership conflicts.
+
+Consequences:
+- Restore summary contract expanded with degraded fields, and downstream consumers can differentiate soft-degraded vs hard-failed restore outcomes.
+
+## ADR-IMPL-019
+Context:
+- Migration cutover gates required checking critical runtime regressions, but CLI cutover flow relied on manually supplied critical-event counts.
+
+Decision:
+- Add event-driven cutover command (`cutover apply-from-events`) that derives critical counts from runtime event storage per capsule.
+
+Rationale:
+- Reduces operator error and aligns cutover gating with observed runtime state.
+
+Consequences:
+- Cutover CLI surface now includes an event-store dependent path in addition to manual gate-input path.
+
+## ADR-IMPL-020
+Context:
+- Capsule specification required persisted repository path metadata per capsule, but capsule contract and storage did not include it.
+
+Decision:
+- Add `repo_path` to capsule model, persist it in SQLite (with migration-safe column addition), and expose CLI mutation/query paths.
+
+Rationale:
+- Enables restore and supervision flows to carry explicit workspace-root metadata as part of capsule state.
+
+Consequences:
+- Capsule serialization and list/export contracts changed to include `repo_path`.
+
+## ADR-IMPL-021
+Context:
+- Runtime observability needed an operator-facing rollup view, but event inspection required raw per-event reads.
+
+Decision:
+- Add `EventStore::summary()` and expose it via `nexumctl events summary --db <path>`.
+
+Rationale:
+- Provides a fast supervisor health view (global totals + per-capsule critical counts) without custom ad-hoc queries.
+
+Consequences:
+- Events CLI contract expands with a summary endpoint and stable JSON shape for monitoring/tooling consumers.
+
+## ADR-IMPL-022
+Context:
+- Capsule lifecycle states were persisted and mutable, but restore execution did not drive state transitions in the store.
+
+Decision:
+- Add optional restore-store wiring (`--capsule-db`) so runflow transitions capsule state to `restoring` and then finalizes to `ready` or `degraded`.
+
+Rationale:
+- Aligns runtime behavior with capsule lifecycle contract and makes restore health visible in persisted control-plane state.
+
+Consequences:
+- Restore CLI contract expands with optional capsule DB input, and runflow now has store dependency for lifecycle persistence when enabled.
+
+## ADR-IMPL-023
+Context:
+- Restore CLI required repeated manual metadata input (`name`, `workspace`, default surface paths) even when capsule state was already persisted.
+
+Decision:
+- Add `nexumctl run restore-capsule` to resolve capsule metadata from store and derive default restore surfaces from capsule `repo_path`.
+
+Rationale:
+- Moves restore closer to one-action capsule recovery behavior while reducing input drift between persisted capsule metadata and runtime command invocation.
+
+Consequences:
+- CLI surface expands with store-driven restore entrypoint and explicit validation when repo metadata is insufficient for default surface derivation.
+
+## ADR-IMPL-024
+Context:
+- Event observability offered summary and capsule-specific history, but lacked a supervisor-friendly query surface for recent filtered events.
+
+Decision:
+- Add filtered event query support in store and expose it via `nexumctl events list`.
+
+Rationale:
+- Enables direct runtime triage workflows (critical-only, capsule-scoped, bounded recent lists) without external SQL tooling.
+
+Consequences:
+- Events CLI contract expands with list query flags and deterministic newest-first ordering semantics.
+
+## ADR-IMPL-025
+Context:
+- Stead/OS integration boundary was implicit through manual CLI invocations, with no typed ingress contract for runtime signal dispatch.
+
+Decision:
+- Add typed Stead dispatch envelope parsing and expose command `nexumctl stead dispatch`.
+
+Rationale:
+- Creates a concrete contract between Stead signal producers and OS restore orchestration while keeping execution testable in CLI/e2e flows.
+
+Consequences:
+- CLI surface expands with Stead dispatch entrypoint; invalid envelopes now fail fast with explicit parse errors.
+
+## ADR-IMPL-026
+Context:
+- Operators had to manually combine capsule state, cutover flags, and runtime events from multiple commands for health triage.
+
+Decision:
+- Add unified `nexumctl supervisor status` report command.
+
+Rationale:
+- Reduces supervision friction by providing one deterministic machine-readable status payload for control-plane triage.
+
+Consequences:
+- CLI surface expands with supervisor health endpoint and per-capsule last-event metadata contract.
+
+## ADR-IMPL-027
+Context:
+- Unified supervisor status improved visibility, but operators still needed a quick reduced set of actionable capsules for incident response.
+
+Decision:
+- Add `nexumctl supervisor blockers` command with explicit degraded/critical-threshold rules.
+
+Rationale:
+- Provides an immediate triage list for intervention workflows without manual filtering of full status payload.
+
+Consequences:
+- CLI supervisor surface now includes blocker-specific endpoint and stable reason taxonomy.
+
+## ADR-IMPL-028
+Context:
+- Event-driven cutover gating existed only at capsule granularity, requiring manual capsule targeting for broader rollout decisions.
+
+Decision:
+- Add `cutover apply-from-summary` to gate capability cutovers using global critical-event totals from runtime event summary.
+
+Rationale:
+- Supports safer capability-level rollout decisions with a single global health signal aligned to shadow-mode migration gates.
+
+Consequences:
+- Cutover CLI now supports both capsule-scoped and global-summary event gate inputs.
+
+## ADR-IMPL-029
+Context:
+- Newly added supervisor outputs introduced broader machine-consumed JSON surfaces without pinned snapshot contracts.
+
+Decision:
+- Add snapshot contract tests for `supervisor status` and `supervisor blockers`.
+
+Rationale:
+- Protects supervisor integration surfaces from accidental schema drift during further control-plane evolution.
+
+Consequences:
+- Supervisor payload changes now require explicit snapshot updates, improving review visibility for contract changes.

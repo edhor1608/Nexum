@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use rusqlite::{Connection, params};
+use rusqlite::{Connection, params, params_from_iter};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -11,6 +11,20 @@ pub struct RuntimeEvent {
     pub level: String,
     pub message: String,
     pub ts_unix_ms: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CapsuleEventSummary {
+    pub capsule_id: String,
+    pub total_events: u32,
+    pub critical_events: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EventSummary {
+    pub total_events: u32,
+    pub critical_events: u32,
+    pub capsules: Vec<CapsuleEventSummary>,
 }
 
 #[derive(Debug, Error)]
@@ -25,8 +39,6 @@ pub enum EventError {
 pub struct EventStore {
     conn: Connection,
 }
-
-const DEFAULT_LIST_LIMIT: u32 = 500;
 
 impl EventStore {
     pub fn open(path: &Path) -> Result<Self, EventError> {
@@ -45,7 +57,6 @@ impl EventStore {
                 message TEXT NOT NULL,
                 ts_unix_ms INTEGER NOT NULL
             );
-            CREATE INDEX IF NOT EXISTS idx_runtime_events_capsule_id ON runtime_events(capsule_id);
             ",
         )?;
 
@@ -71,28 +82,17 @@ impl EventStore {
     }
 
     pub fn list_for_capsule(&self, capsule_id: &str) -> Result<Vec<RuntimeEvent>, EventError> {
-        self.list_for_capsule_paginated(capsule_id, DEFAULT_LIST_LIMIT, 0)
-    }
-
-    pub fn list_for_capsule_paginated(
-        &self,
-        capsule_id: &str,
-        limit: u32,
-        offset: u32,
-    ) -> Result<Vec<RuntimeEvent>, EventError> {
         let mut stmt = self.conn.prepare(
             "
             SELECT capsule_id, component, level, message, ts_unix_ms
             FROM runtime_events
             WHERE capsule_id = ?1
             ORDER BY id ASC
-            LIMIT ?2
-            OFFSET ?3
             ",
         )?;
 
         let rows = stmt
-            .query_map(params![capsule_id, limit, offset], |row| {
+            .query_map(params![capsule_id], |row| {
                 Ok(RuntimeEvent {
                     capsule_id: row.get(0)?,
                     component: row.get(1)?,
@@ -103,6 +103,109 @@ impl EventStore {
             })?
             .collect::<Result<Vec<_>, _>>()?;
 
+        Ok(rows)
+    }
+
+    pub fn count_for_capsule_level(
+        &self,
+        capsule_id: &str,
+        level: &str,
+    ) -> Result<u32, EventError> {
+        let count = self.conn.query_row(
+            "
+            SELECT COUNT(*)
+            FROM runtime_events
+            WHERE capsule_id = ?1 AND level = ?2
+            ",
+            params![capsule_id, level],
+            |row| row.get::<_, u32>(0),
+        )?;
+        Ok(count)
+    }
+
+    pub fn summary(&self) -> Result<EventSummary, EventError> {
+        let total_events =
+            self.conn
+                .query_row("SELECT COUNT(*) FROM runtime_events", [], |row| {
+                    row.get::<_, u32>(0)
+                })?;
+        let critical_events = self.conn.query_row(
+            "SELECT COUNT(*) FROM runtime_events WHERE level = 'critical'",
+            [],
+            |row| row.get::<_, u32>(0),
+        )?;
+
+        let mut stmt = self.conn.prepare(
+            "
+            SELECT capsule_id, COUNT(*) AS total_events,
+                   SUM(CASE WHEN level = 'critical' THEN 1 ELSE 0 END) AS critical_events
+            FROM runtime_events
+            GROUP BY capsule_id
+            ORDER BY capsule_id ASC
+            ",
+        )?;
+        let capsules = stmt
+            .query_map([], |row| {
+                Ok(CapsuleEventSummary {
+                    capsule_id: row.get(0)?,
+                    total_events: row.get(1)?,
+                    critical_events: row.get(2)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(EventSummary {
+            total_events,
+            critical_events,
+            capsules,
+        })
+    }
+
+    pub fn list_recent(
+        &self,
+        capsule_id: Option<&str>,
+        level: Option<&str>,
+        limit: Option<u32>,
+    ) -> Result<Vec<RuntimeEvent>, EventError> {
+        let mut query = String::from(
+            "
+            SELECT capsule_id, component, level, message, ts_unix_ms
+            FROM runtime_events
+            ",
+        );
+        let mut predicates = Vec::new();
+        let mut values = Vec::new();
+
+        if let Some(capsule_id) = capsule_id {
+            predicates.push("capsule_id = ?");
+            values.push(rusqlite::types::Value::Text(capsule_id.to_string()));
+        }
+        if let Some(level) = level {
+            predicates.push("level = ?");
+            values.push(rusqlite::types::Value::Text(level.to_string()));
+        }
+        if !predicates.is_empty() {
+            query.push_str(" WHERE ");
+            query.push_str(&predicates.join(" AND "));
+        }
+        query.push_str(" ORDER BY ts_unix_ms DESC, id DESC");
+        if let Some(limit) = limit {
+            query.push_str(" LIMIT ?");
+            values.push(rusqlite::types::Value::Integer(limit as i64));
+        }
+
+        let mut stmt = self.conn.prepare(&query)?;
+        let rows = stmt
+            .query_map(params_from_iter(values), |row| {
+                Ok(RuntimeEvent {
+                    capsule_id: row.get(0)?,
+                    component: row.get(1)?,
+                    level: row.get(2)?,
+                    message: row.get(3)?,
+                    ts_unix_ms: row.get(4)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
         Ok(rows)
     }
 }
