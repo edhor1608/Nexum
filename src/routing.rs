@@ -208,5 +208,7 @@ async fn handle_connection(
 }
 
 pub fn default_socket_path() -> PathBuf {
-    PathBuf::from("/tmp/nexumd.sock")
+    std::env::var_os("XDG_RUNTIME_DIR")
+        .map(|dir| PathBuf::from(dir).join("nexumd.sock"))
+        .unwrap_or_else(|| std::env::temp_dir().join("nexumd.sock"))
 }
