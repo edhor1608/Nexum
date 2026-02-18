@@ -2,7 +2,6 @@
 name = "nexum"
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.85"
 description = "Nexum control-plane primitives"
 license = "MPL-2.0"
 
@@ -14,6 +13,9 @@ thiserror = "2.0"
 tokio = { version = "1.45", features = ["rt-multi-thread", "macros", "net", "io-util", "sync", "time"] }
 rusqlite = { version = "0.37", features = ["bundled"] }
 toml = "0.9"
+rcgen = "0.14"
+sha2 = "0.10"
+time = "0.3"
 
 [dev-dependencies]
 insta = { version = "1.43", features = ["yaml", "json"] }

@@ -6,6 +6,7 @@ use nexum::{
     shadow::{ExecutionResult, compare_execution},
     shell::{NiriShellCommand, NiriShellPlan, render_shell_script},
     store::CapsuleStore,
+    tls::{ensure_self_signed_cert, rotate_if_expiring},
 };
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -20,6 +21,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "flags" => flags_command(&args[1..])?,
         "parity" => parity_command(&args[1..])?,
         "shell" => shell_command(&args[1..])?,
+        "tls" => tls_command(&args[1..])?,
         _ => {
             usage();
             std::process::exit(2);
@@ -195,6 +197,46 @@ fn shell_render(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+fn tls_command(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    if args.is_empty() {
+        usage();
+        std::process::exit(2);
+    }
+
+    match args[0].as_str() {
+        "ensure" => tls_ensure(&args[1..]),
+        "rotate" => tls_rotate(&args[1..]),
+        _ => {
+            usage();
+            std::process::exit(2);
+        }
+    }
+}
+
+fn tls_ensure(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let dir = PathBuf::from(required_arg(args, "--dir")?);
+    let domain = required_arg(args, "--domain")?;
+    let validity_days = if args.iter().any(|arg| arg == "--validity-days") {
+        required_arg(args, "--validity-days")?.parse::<u64>()?
+    } else {
+        30
+    };
+
+    let record = ensure_self_signed_cert(&dir, &domain, validity_days)?;
+    println!("{}", serde_json::to_string(&record)?);
+    Ok(())
+}
+
+fn tls_rotate(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let dir = PathBuf::from(required_arg(args, "--dir")?);
+    let domain = required_arg(args, "--domain")?;
+    let threshold_days = required_arg(args, "--threshold-days")?.parse::<u64>()?;
+
+    let outcome = rotate_if_expiring(&dir, &domain, threshold_days)?;
+    println!("{}", serde_json::to_string(&outcome)?);
+    Ok(())
+}
+
 fn required_arg(args: &[String], key: &str) -> Result<String, Box<dyn std::error::Error>> {
     let pos = args
         .iter()
@@ -265,4 +307,6 @@ fn usage() {
     eprintln!(
         "nexumctl shell render --workspace <n> --terminal <cmd> --editor <path> --browser <url> --attention <level>"
     );
+    eprintln!("nexumctl tls ensure --dir <path> --domain <domain> [--validity-days <days>]");
+    eprintln!("nexumctl tls rotate --dir <path> --domain <domain> --threshold-days <days>");
 }

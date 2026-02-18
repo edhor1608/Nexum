@@ -1,0 +1,11 @@
+---
+source: tests/tls_snapshots.rs
+assertion_line: 14
+expression: record
+---
+domain: agent.nexum.local
+cert_path: /tmp/agent.nexum.local.crt.pem
+key_path: /tmp/agent.nexum.local.key.pem
+fingerprint_sha256: abc123
+created_unix_ms: 1
+expires_unix_ms: 2

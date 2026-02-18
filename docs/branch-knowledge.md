@@ -64,3 +64,13 @@
 - Adapter unit tests for command ordering and failure stop behavior.
 - Snapshot contract for rendered niri shell script.
 - CLI e2e test for shell script rendering.
+
+## Additional Work (Milestone 7)
+- Added self-signed TLS certificate lifecycle manager (`tls` module).
+- Implemented cert generation, reuse, metadata persistence, and threshold-based rotation.
+- Extended `nexumctl` with `tls ensure` and `tls rotate` commands.
+
+## New Test Coverage (Milestone 7)
+- TLS lifecycle behavior tests (create/reuse/rotate/no-rotate).
+- TLS record snapshot contract.
+- TLS CLI e2e validation.
