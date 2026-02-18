@@ -10,6 +10,7 @@ pub struct PortAllocator {
 
 impl PortAllocator {
     pub fn new(start: u16, end: u16) -> Self {
+        assert!(start <= end, "port range start must be <= end");
         Self {
             start,
             end,
@@ -34,6 +35,10 @@ impl PortAllocator {
     }
 
     pub fn reserve(&mut self, port: u16) {
+        assert!(
+            (self.start..=self.end).contains(&port),
+            "reserved port out of range"
+        );
         self.used.insert(port);
     }
 
