@@ -4,6 +4,8 @@ use nexum::{
     capsule::{Capsule, CapsuleMode},
     cutover::{CutoverInput, apply_cutover, evaluate_cutover, parse_capability},
     flags::{CutoverFlags, FlagName},
+    restore::SignalType,
+    runflow::{RestoreRunInput, run_restore_flow},
     shadow::{ExecutionResult, compare_execution},
     shell::{NiriShellCommand, NiriShellPlan, render_shell_script},
     store::CapsuleStore,
@@ -24,6 +26,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "shell" => shell_command(&args[1..])?,
         "tls" => tls_command(&args[1..])?,
         "cutover" => cutover_command(&args[1..])?,
+        "run" => run_command(&args[1..])?,
         _ => {
             usage();
             std::process::exit(2);
@@ -281,6 +284,41 @@ fn cutover_apply(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+fn run_command(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    if args.is_empty() {
+        usage();
+        std::process::exit(2);
+    }
+
+    match args[0].as_str() {
+        "restore" => run_restore(&args[1..]),
+        _ => {
+            usage();
+            std::process::exit(2);
+        }
+    }
+}
+
+fn run_restore(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let signal = parse_signal(&required_arg(args, "--signal")?)?;
+
+    let summary = run_restore_flow(RestoreRunInput {
+        capsule_id: required_arg(args, "--capsule-id")?,
+        display_name: required_arg(args, "--name")?,
+        workspace: required_arg(args, "--workspace")?.parse::<u16>()?,
+        signal,
+        terminal_cmd: required_arg(args, "--terminal")?,
+        editor_target: required_arg(args, "--editor")?,
+        browser_url: required_arg(args, "--browser")?,
+        route_upstream: required_arg(args, "--upstream")?,
+        tls_dir: PathBuf::from(required_arg(args, "--tls-dir")?),
+        events_db: PathBuf::from(required_arg(args, "--events-db")?),
+    })?;
+
+    println!("{}", serde_json::to_string(&summary)?);
+    Ok(())
+}
+
 fn required_arg(args: &[String], key: &str) -> Result<String, Box<dyn std::error::Error>> {
     let pos = args
         .iter()
@@ -329,6 +367,15 @@ fn parse_bool(input: &str) -> Result<bool, Box<dyn std::error::Error>> {
     }
 }
 
+fn parse_signal(input: &str) -> Result<SignalType, Box<dyn std::error::Error>> {
+    match input {
+        "needs_decision" => Ok(SignalType::NeedsDecision),
+        "critical_failure" => Ok(SignalType::CriticalFailure),
+        "passive_completion" => Ok(SignalType::PassiveCompletion),
+        _ => Err(format!("invalid signal: {input}").into()),
+    }
+}
+
 fn mode_to_str(mode: CapsuleMode) -> &'static str {
     match mode {
         CapsuleMode::HostDefault => "host_default",
@@ -355,5 +402,8 @@ fn usage() {
     eprintln!("nexumctl tls rotate --dir <path> --domain <domain> --threshold-days <days>");
     eprintln!(
         "nexumctl cutover apply --file <path> --capability <routing|restore|attention> --parity-score <f64> --min-parity-score <f64> --critical-events <u32> --max-critical-events <u32> --shadow-mode <true|false>"
+    );
+    eprintln!(
+        "nexumctl run restore --capsule-id <id> --name <name> --workspace <n> --signal <needs_decision|critical_failure|passive_completion> --terminal <cmd> --editor <path> --browser <url> --upstream <host:port> --tls-dir <path> --events-db <path>"
     );
 }

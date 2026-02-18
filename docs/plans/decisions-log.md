@@ -103,3 +103,16 @@ Rationale:
 
 Consequences:
 - Threshold tuning (parity and critical event limits) becomes an operational responsibility.
+
+## ADR-IMPL-009
+Context:
+- Needed one executable end-to-end control-plane path to validate composition of previously isolated modules.
+
+Decision:
+- Add `runflow` module and `nexumctl run restore` command that orchestrate restore planning + routing + TLS + shell rendering + events.
+
+Rationale:
+- Provides a concrete, testable integration slice suitable for rollout rehearsals.
+
+Consequences:
+- Current runflow uses in-process route registration and should later be wired to daemon-backed routing for production path parity.
