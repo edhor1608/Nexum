@@ -493,3 +493,16 @@ Rationale:
 
 Consequences:
 - Dispatch-batch now supports dual output channels (stdout + optional file) with deterministic payload parity.
+
+## ADR-IMPL-039
+Context:
+- Repository-level README still reflected superseded architecture choices (`D-002 A`, `D-005 C`) after decision updates and implementation progress.
+
+Decision:
+- Align README baseline and status wording with resolved decisions (`D-002 B`, `D-005 B`) and current implementation phase.
+
+Rationale:
+- Prevents planning/implementation drift and keeps branch-level onboarding aligned with source-of-truth project decisions.
+
+Consequences:
+- Public project overview now reflects the same architecture commitments enforced in ongoing milestone PRs.

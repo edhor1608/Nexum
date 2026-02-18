@@ -366,3 +366,10 @@
 
 ## New Test Coverage (Milestone 38)
 - Stead CLI e2e validating report-file creation and byte-equivalent JSON payload parity between stdout and saved artifact.
+
+## Additional Work (Milestone 39)
+- Performed drift audit against source-of-truth Obsidian decision pack and adjusted repo docs to match locked/resolved architecture.
+- Updated root `README.md` architecture baseline to align with:
+  - D-002: niri-centric shell with deep Stead integration
+  - D-005: OS control-plane-first Stead integration
+- Updated project status section in `README.md` from planning-only wording to active implementation status.
