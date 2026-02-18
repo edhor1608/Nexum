@@ -2,6 +2,7 @@ use nexum::{
     capsule::{Capsule, CapsuleMode},
     store::CapsuleStore,
 };
+use rusqlite::Connection;
 use tempfile::tempdir;
 
 #[test]
@@ -52,4 +53,22 @@ fn renaming_display_name_keeps_slug_stable_in_store() {
     let loaded = store.get("cap-store-3").unwrap().unwrap();
     assert_eq!(loaded.slug, "billing-api");
     assert_eq!(loaded.display_name, "Billing API V2");
+}
+
+#[test]
+fn store_rejects_unknown_capsule_mode_values() {
+    let dir = tempdir().unwrap();
+    let db = dir.path().join("capsules.sqlite3");
+    let _ = CapsuleStore::open(&db).unwrap();
+
+    let conn = Connection::open(&db).unwrap();
+    conn.execute(
+        "INSERT INTO capsules (capsule_id, slug, display_name, mode, workspace) VALUES (?1, ?2, ?3, ?4, ?5)",
+        rusqlite::params!["cap-bad-mode", "bad-mode", "Bad Mode", "future_mode", 9u16],
+    )
+    .unwrap();
+
+    let store = CapsuleStore::open(&db).unwrap();
+    let err = store.list().unwrap_err().to_string();
+    assert!(err.contains("invalid mode: future_mode"));
 }
