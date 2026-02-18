@@ -376,3 +376,42 @@ Rationale:
 
 Consequences:
 - Supervisor payload changes now require explicit snapshot updates, improving review visibility for contract changes.
+
+## ADR-IMPL-030
+Context:
+- Capsule YAML export existed at store layer but had no operator-facing CLI entrypoint.
+
+Decision:
+- Add `capsule export --format yaml` command in `nexumctl`.
+
+Rationale:
+- Makes capsule contract export directly accessible for review, portability checks, and automation without custom code.
+
+Consequences:
+- Capsule CLI surface now includes explicit YAML export command and format validation behavior.
+
+## ADR-IMPL-031
+Context:
+- Migration strategy required reversible cutovers, but CLI only supported forward enablement paths.
+
+Decision:
+- Add `cutover rollback` command to disable a targeted control-plane capability flag.
+
+Rationale:
+- Provides an explicit, scriptable rollback primitive aligned with D-008 shadow-mode migration safety.
+
+Consequences:
+- Cutover CLI now supports both activation and rollback paths with machine-readable rollback confirmation output.
+
+## ADR-IMPL-032
+Context:
+- Stead dispatch ingress handled only single event envelopes, requiring repeated CLI/process overhead for batch replay scenarios.
+
+Decision:
+- Add `stead dispatch-batch` command accepting an array of dispatch envelopes and producing per-event outcome records.
+
+Rationale:
+- Enables deterministic multi-event replay and supervisor ingestion workflows while preserving per-event failure visibility.
+
+Consequences:
+- Stead CLI surface now includes batch ingestion endpoint with aggregated processed/succeeded/failed counters and per-event errors.

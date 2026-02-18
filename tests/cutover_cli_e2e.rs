@@ -42,6 +42,55 @@ fn nexumctl_cutover_apply_updates_flags_when_allowed() {
         .unwrap();
 
     assert!(show.status.success());
+    let flags = String::from_utf8(show.stdout).unwrap();
+    assert!(flags.contains("\"routing_control_plane\":true"));
+}
+
+#[test]
+fn nexumctl_cutover_rollback_disables_capability_flag() {
+    let dir = tempdir().unwrap();
+    let file = dir.path().join("flags.toml");
+    let nexumctl = assert_cmd::cargo::cargo_bin!("nexumctl");
+
+    let set = Command::new(nexumctl)
+        .arg("flags")
+        .arg("set")
+        .arg("--file")
+        .arg(&file)
+        .arg("--routing")
+        .arg("true")
+        .arg("--restore")
+        .arg("true")
+        .output()
+        .unwrap();
+    assert!(set.status.success());
+
+    let out = Command::new(nexumctl)
+        .arg("cutover")
+        .arg("rollback")
+        .arg("--file")
+        .arg(&file)
+        .arg("--capability")
+        .arg("routing")
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let payload: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(payload["rolled_back"], Value::Bool(true));
+    assert_eq!(
+        payload["flag"],
+        Value::String("routing_control_plane".into())
+    );
+
+    let show = Command::new(nexumctl)
+        .arg("flags")
+        .arg("show")
+        .arg("--file")
+        .arg(&file)
+        .output()
+        .unwrap();
+    assert!(show.status.success());
     let flags: Value = serde_json::from_slice(&show.stdout).unwrap();
-    assert_eq!(flags["routing_control_plane"], Value::Bool(true));
+    assert_eq!(flags["routing_control_plane"], Value::Bool(false));
+    assert_eq!(flags["restore_control_plane"], Value::Bool(true));
 }

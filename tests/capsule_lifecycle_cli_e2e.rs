@@ -76,3 +76,45 @@ fn nexumctl_can_rename_and_transition_capsule_state() {
     assert!(stdout.contains("\"state\":\"degraded\""));
     assert!(stdout.contains("\"repo_path\":\"/workspace/ops-core\""));
 }
+
+#[test]
+fn nexumctl_can_export_capsules_as_yaml() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = dir.path().join("capsules.sqlite3");
+    let nexumctl = assert_cmd::cargo::cargo_bin!("nexumctl");
+
+    let created = Command::new(nexumctl)
+        .arg("capsule")
+        .arg("create")
+        .arg("--db")
+        .arg(&db)
+        .arg("--id")
+        .arg("cap-cli-export")
+        .arg("--name")
+        .arg("Export Capsule")
+        .arg("--workspace")
+        .arg("5")
+        .arg("--mode")
+        .arg("host_default")
+        .arg("--repo-path")
+        .arg("/workspace/export-capsule")
+        .output()
+        .unwrap();
+    assert!(created.status.success());
+
+    let exported = Command::new(nexumctl)
+        .arg("capsule")
+        .arg("export")
+        .arg("--db")
+        .arg(&db)
+        .arg("--format")
+        .arg("yaml")
+        .output()
+        .unwrap();
+    assert!(exported.status.success());
+
+    let stdout = String::from_utf8(exported.stdout).unwrap();
+    assert!(stdout.contains("capsule_id: cap-cli-export"));
+    assert!(stdout.contains("repo_path: /workspace/export-capsule"));
+    assert!(stdout.contains("state: ready"));
+}
