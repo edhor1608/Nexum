@@ -1,0 +1,11 @@
+---
+source: tests/supervisor_snapshots.rs
+assertion_line: 105
+expression: payload
+---
+- capsule_id: cap-snap-2
+  critical_events: 1
+  reasons:
+    - state_degraded
+    - critical_events_threshold
+  state: degraded

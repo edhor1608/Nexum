@@ -1,0 +1,35 @@
+---
+source: tests/supervisor_snapshots.rs
+assertion_line: 80
+expression: payload
+---
+archived_capsules: 0
+capsules:
+  - capsule_id: cap-snap-1
+    critical_events: 0
+    display_name: Snap One
+    last_event_level: info
+    last_event_message: ok
+    last_event_ts_unix_ms: 1000
+    mode: host_default
+    repo_path: ""
+    state: ready
+    workspace: 41
+  - capsule_id: cap-snap-2
+    critical_events: 1
+    display_name: Snap Two
+    last_event_level: critical
+    last_event_message: failed
+    last_event_ts_unix_ms: 1100
+    mode: isolated_nix_shell
+    repo_path: ""
+    state: degraded
+    workspace: 42
+critical_events: 1
+degraded_capsules: 1
+flags:
+  attention_control_plane: false
+  restore_control_plane: false
+  routing_control_plane: true
+  shadow_mode: true
+total_capsules: 2

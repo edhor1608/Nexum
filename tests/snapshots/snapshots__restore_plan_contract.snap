@@ -1,0 +1,21 @@
+---
+source: tests/snapshots.rs
+assertion_line: 23
+expression: plan
+---
+capsule_id: cap-snap-2
+signal: critical_failure
+target_budget_ms: 9500
+steps:
+  - kind: ensure_routing
+    value: auth-gateway.nexum.local
+  - kind: focus_workspace
+    value: 9
+  - kind: launch_terminal
+    value: cd /workspace/auth-gateway && nix develop
+  - kind: launch_editor
+    value: /workspace/auth-gateway
+  - kind: launch_browser
+    value: "https://auth-gateway.nexum.local/ops"
+  - kind: present_attention
+    value: critical_failure

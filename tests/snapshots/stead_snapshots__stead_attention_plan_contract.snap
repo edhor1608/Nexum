@@ -1,0 +1,25 @@
+---
+source: tests/stead_snapshots.rs
+expression: payload
+---
+active: 1
+blocking: 1
+focus_capsule_id: cap-critical
+passive: 1
+requires_ack_count: 2
+routes:
+  - capsule_id: cap-passive
+    channel: feed
+    priority: passive
+    requires_ack: false
+    summary: "passive_completion from 127.0.0.1:5200"
+  - capsule_id: cap-active
+    channel: banner
+    priority: active
+    requires_ack: true
+    summary: "needs_decision from 127.0.0.1:5201"
+  - capsule_id: cap-critical
+    channel: banner_and_sound
+    priority: blocking
+    requires_ack: true
+    summary: "critical_failure from 127.0.0.1:5202"

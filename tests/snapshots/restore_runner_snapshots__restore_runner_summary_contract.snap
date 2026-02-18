@@ -1,0 +1,14 @@
+---
+source: tests/restore_runner_snapshots.rs
+assertion_line: 32
+expression: summary
+---
+capsule_id: cap-run-snap
+domain: runner-snap.nexum.local
+run_mode: host_default
+degraded: false
+degraded_reason: ~
+target_budget_ms: 9500
+shell_script: "export NEXUM_CAPSULE_DOMAIN=runner-snap.nexum.local\nexport NEXUM_CAPSULE_ID=cap-run-snap\nexport NEXUM_CAPSULE_SLUG=runner-snap\nexport NEXUM_CAPSULE_WORKSPACE=5\nexport NEXUM_PROCESS_LABEL=nexum-terminal-cap-run-snap\nniri msg action focus-workspace 5\nwezterm start -- bash -lc 'cd /workspace/snap && nix develop'\ncode /workspace/snap\nxdg-open https://runner-snap.nexum.local\nnotify-send 'Nexum Attention' 'critical_failure'"
+tls_fingerprint_sha256: "<fingerprint>"
+events_written: 3

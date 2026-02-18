@@ -1,0 +1,19 @@
+---
+source: tests/store_snapshots.rs
+assertion_line: 31
+expression: exported
+---
+- capsule_id: cap-yaml-1
+  slug: planner-service
+  display_name: Planner Service
+  repo_path: ''
+  mode: host_default
+  state: ready
+  workspace: 8
+- capsule_id: cap-yaml-2
+  slug: agent-gateway
+  display_name: Agent Gateway
+  repo_path: ''
+  mode: isolated_nix_shell
+  state: ready
+  workspace: 9

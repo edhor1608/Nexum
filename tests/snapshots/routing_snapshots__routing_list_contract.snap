@@ -1,0 +1,15 @@
+---
+source: tests/routing_snapshots.rs
+assertion_line: 18
+expression: listed
+---
+kind: listed
+routes:
+  - capsule_id: cap-a
+    domain: alpha.nexum.local
+    upstream: "127.0.0.1:4301"
+    tls_mode: self_signed
+  - capsule_id: cap-b
+    domain: beta.nexum.local
+    upstream: "127.0.0.1:4302"
+    tls_mode: self_signed
