@@ -216,9 +216,11 @@ fn tls_command(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
 fn tls_ensure(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let dir = PathBuf::from(required_arg(args, "--dir")?);
     let domain = required_arg(args, "--domain")?;
-    let validity_days = optional_arg(args, "--validity-days")
-        .unwrap_or_else(|| "30".to_string())
-        .parse::<u64>()?;
+    let validity_days = if args.iter().any(|arg| arg == "--validity-days") {
+        required_arg(args, "--validity-days")?.parse::<u64>()?
+    } else {
+        30
+    };
 
     let record = ensure_self_signed_cert(&dir, &domain, validity_days)?;
     println!("{}", serde_json::to_string(&record)?);
@@ -243,6 +245,9 @@ fn required_arg(args: &[String], key: &str) -> Result<String, Box<dyn std::error
     let value = args
         .get(pos + 1)
         .ok_or_else(|| format!("missing value for {key}"))?;
+    if value.starts_with('-') {
+        return Err(format!("missing value for {key}").into());
+    }
     Ok(value.to_string())
 }
 
