@@ -1,5 +1,6 @@
 use std::{
     collections::BTreeMap,
+    os::unix::fs::FileTypeExt,
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
 };
@@ -133,7 +134,19 @@ pub async fn serve_unix_socket(
     mut shutdown_rx: oneshot::Receiver<()>,
 ) -> Result<(), RoutingError> {
     if socket_path.exists() {
-        std::fs::remove_file(socket_path)?;
+        let meta = std::fs::symlink_metadata(socket_path)?;
+        if meta.file_type().is_socket() {
+            std::fs::remove_file(socket_path)?;
+        } else {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::AlreadyExists,
+                format!(
+                    "socket path exists and is not a Unix socket: {}",
+                    socket_path.display()
+                ),
+            )
+            .into());
+        }
     }
 
     if let Some(parent) = socket_path.parent() {

@@ -25,6 +25,7 @@ fn daemon_binary_serves_json_over_unix_socket() {
         }
         std::thread::sleep(Duration::from_millis(25));
     }
+    assert!(socket.exists(), "socket was not created within 1s");
 
     let mut stream = UnixStream::connect(&socket).unwrap();
     stream
