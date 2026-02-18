@@ -5,6 +5,7 @@ use nexum::{
     cutover::{CutoverInput, apply_cutover, evaluate_cutover, parse_capability},
     flags::{CutoverFlags, FlagName},
     restore::SignalType,
+    routing::{RouteCommand, default_socket_path, send_command},
     runflow::{RestoreRunInput, run_restore_flow},
     shadow::{ExecutionResult, compare_execution},
     shell::{NiriShellCommand, NiriShellPlan, render_shell_script},
@@ -23,6 +24,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "capsule" => capsule_command(&args[1..])?,
         "flags" => flags_command(&args[1..])?,
         "parity" => parity_command(&args[1..])?,
+        "routing" => routing_command(&args[1..])?,
         "shell" => shell_command(&args[1..])?,
         "tls" => tls_command(&args[1..])?,
         "cutover" => cutover_command(&args[1..])?,
@@ -163,6 +165,88 @@ fn parity_compare(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let report = compare_execution(&primary, &candidate);
     println!("{}", serde_json::to_string(&report)?);
     Ok(())
+}
+
+fn routing_command(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    if args.is_empty() {
+        usage();
+        std::process::exit(2);
+    }
+
+    match args[0].as_str() {
+        "health" => routing_health(&args[1..]),
+        "register" => routing_register(&args[1..]),
+        "resolve" => routing_resolve(&args[1..]),
+        "remove" => routing_remove(&args[1..]),
+        "list" => routing_list(&args[1..]),
+        _ => {
+            usage();
+            std::process::exit(2);
+        }
+    }
+}
+
+fn routing_health(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let outcome = route_request(socket_arg_or_default(args), RouteCommand::Health)?;
+    println!("{}", serde_json::to_string(&outcome)?);
+    Ok(())
+}
+
+fn routing_register(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let outcome = route_request(
+        socket_arg_or_default(args),
+        RouteCommand::Register {
+            capsule_id: required_arg(args, "--capsule-id")?,
+            domain: required_arg(args, "--domain")?,
+            upstream: required_arg(args, "--upstream")?,
+        },
+    )?;
+    println!("{}", serde_json::to_string(&outcome)?);
+    Ok(())
+}
+
+fn routing_resolve(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let outcome = route_request(
+        socket_arg_or_default(args),
+        RouteCommand::Resolve {
+            domain: required_arg(args, "--domain")?,
+        },
+    )?;
+    println!("{}", serde_json::to_string(&outcome)?);
+    Ok(())
+}
+
+fn routing_remove(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let outcome = route_request(
+        socket_arg_or_default(args),
+        RouteCommand::Remove {
+            domain: required_arg(args, "--domain")?,
+        },
+    )?;
+    println!("{}", serde_json::to_string(&outcome)?);
+    Ok(())
+}
+
+fn routing_list(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let outcome = route_request(socket_arg_or_default(args), RouteCommand::List)?;
+    println!("{}", serde_json::to_string(&outcome)?);
+    Ok(())
+}
+
+fn socket_arg_or_default(args: &[String]) -> PathBuf {
+    optional_arg(args, "--socket")
+        .map(PathBuf::from)
+        .unwrap_or_else(default_socket_path)
+}
+
+fn route_request(
+    socket: PathBuf,
+    command: RouteCommand,
+) -> Result<nexum::routing::RouteOutcome, Box<dyn std::error::Error>> {
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_io()
+        .build()?;
+    Ok(runtime.block_on(send_command(&socket, command))?)
 }
 
 fn shell_command(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
@@ -395,6 +479,13 @@ fn usage() {
     eprintln!(
         "nexumctl parity compare (--primary-json <json> | --primary-file <path>) (--candidate-json <json> | --candidate-file <path>)"
     );
+    eprintln!("nexumctl routing health [--socket <path>]");
+    eprintln!(
+        "nexumctl routing register --capsule-id <id> --domain <domain> --upstream <host:port> [--socket <path>]"
+    );
+    eprintln!("nexumctl routing resolve --domain <domain> [--socket <path>]");
+    eprintln!("nexumctl routing remove --domain <domain> [--socket <path>]");
+    eprintln!("nexumctl routing list [--socket <path>]");
     eprintln!(
         "nexumctl shell render --workspace <n> --terminal <cmd> --editor <path> --browser <url> --attention <level>"
     );

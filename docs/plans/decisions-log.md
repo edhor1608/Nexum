@@ -116,3 +116,29 @@ Rationale:
 
 Consequences:
 - Current runflow uses in-process route registration and should later be wired to daemon-backed routing for production path parity.
+
+## ADR-IMPL-010
+Context:
+- `nexumd` daemon protocol existed, but operators lacked a first-class CLI to exercise and verify it.
+
+Decision:
+- Add `nexumctl routing` subcommands that call daemon socket API (`health/register/resolve/remove/list`) and return JSON outcomes.
+
+Rationale:
+- Keeps routing operations scriptable and testable without bespoke socket tooling.
+
+Consequences:
+- CLI now owns async runtime bridging logic and must stay aligned with routing protocol contract changes.
+
+## ADR-IMPL-011
+Context:
+- Restore orchestration still used in-process route registration, leaving a parity gap against daemon-driven routing operations.
+
+Decision:
+- Add optional daemon routing socket support to `run_restore_flow` and expose it via `nexumctl run restore --routing-socket`.
+
+Rationale:
+- Aligns restore path with control-plane-first routing behavior while preserving offline local fallback.
+
+Consequences:
+- Runflow now owns dual-path routing logic (daemon-backed and fallback in-process), which must remain behaviorally consistent.
