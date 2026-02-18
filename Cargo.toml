@@ -2,6 +2,7 @@
 name = "nexum"
 version = "0.1.0"
 edition = "2024"
+rust-version = "1.85"
 description = "Nexum control-plane primitives"
 license = "MPL-2.0"
 
