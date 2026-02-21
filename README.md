@@ -56,3 +56,14 @@ MPL-2.0
 
 **Nexum** — a binding/connection.  
 The name reflects the goal: binding project state, tools, and attention into one coherent system.
+
+<!-- status:start -->
+## Status
+- State: active
+- Summary: Define current milestone.
+- Next: Define next concrete step.
+- Updated: 2026-02-21
+- Branch: `main`
+- Working Tree: dirty (2 files)
+- Last Commit: 8bc7167 (2026-02-18) M1: Core capsule/restore/resource contracts (#1)
+<!-- status:end -->
